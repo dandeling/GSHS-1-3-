@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>글 보기 · GSHS 1-3</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <main>
+    <div class="card" id="postCard">불러오는 중…</div>
+
+    <div class="card">
+      <h2>댓글 <span id="ccount" class="muted"></span></h2>
+      <div id="comments"></div>
+      <form id="commentForm" style="margin-top:14px">
+        <div class="row">
+          <input id="commentInput" class="grow" placeholder="댓글을 입력하세요 (비속어 시 벌점 +1)" required />
+          <button type="submit">등록</button>
+        </div>
+      </form>
+      <div id="cmsg" class="hidden"></div>
+    </div>
+
+    <!-- 흔적 보기 (관리자) -->
+    <div class="card hidden" id="traceCard">
+      <h2>🔎 흔적 (수정·삭제 이력)</h2>
+      <div id="traceBody" class="muted">불러오는 중…</div>
+    </div>
+  </main>
+  <script type="module">
+    import { renderNav, api, esc, fmt, qs, showMsg } from '/js/common.js';
+    const me = await renderNav({ requireLogin: true });
+    const id = qs('id');
+    let data;
+
+    async function load() {
+      data = await api.get('/api/posts/' + id);
+      const p = data.post;
+      const canEdit = p.author_id === me.id || me.role === 'admin';
+      document.getElementById('postCard').innerHTML = `
+        <div class="row"><a href="javascript:history.back()" class="muted grow">← 목록</a>
+          ${canEdit ? `<a class="btn btn-ghost btn-sm" href="/write.html?id=${p.id}">수정</a>
+          <button class="btn-danger btn-sm" id="delBtn">삭제</button>` : ''}
+          ${me.role === 'admin' ? `<button class="btn-ghost btn-sm" id="traceBtn">흔적 보기</button>` : ''}
+        </div>
+        <h1 style="margin-top:12px">${esc(p.title)}</h1>
+        <p class="muted">${esc(p.author)} · ${fmt(p.created_at)} ${p.updated_at ? '(수정됨)' : ''} · 조회 ${p.views}</p>
+        <hr style="border:none;border-top:1px solid var(--border)" />
+        <div style="white-space:pre-wrap;font-size:15px">${esc(p.content)}</div>`;
+
+      if (canEdit) document.getElementById('delBtn').addEventListener('click', async () => {
+        if (!confirm('정말 삭제할까요?')) return;
+        await api.del('/api/posts/' + id);
+        history.back();
+      });
+      if (me.role === 'admin') document.getElementById('traceBtn').addEventListener('click', loadTrace);
+
+      renderComments();
+    }
+
+    function renderComments() {
+      document.getElementById('ccount').textContent = data.comments.length;
+      const box = document.getElementById('comments');
+      if (data.comments.length === 0) { box.innerHTML = '<p class="muted">첫 댓글을 남겨보세요.</p>'; return; }
+      box.innerHTML = data.comments.map((c) => `
+        <div class="comment">
+          <span class="who">${esc(c.author)}</span><span class="time">${fmt(c.created_at)}</span>
+          ${(c.author_id === me.id || me.role === 'admin') ? `<a href="#" class="muted" style="float:right;font-size:12px" data-del="${c.id}">삭제</a>` : ''}
+          <div style="white-space:pre-wrap">${esc(c.content)}</div>
+        </div>`).join('');
+      box.querySelectorAll('[data-del]').forEach((a) => a.addEventListener('click', async (e) => {
+        e.preventDefault();
+        if (!confirm('댓글을 삭제할까요?')) return;
+        await api.del('/api/posts/comments/' + a.dataset.del);
+        await load();
+      }));
+    }
+
+    async function loadTrace() {
+      const card = document.getElementById('traceCard');
+      card.classList.remove('hidden');
+      const d = await api.get(`/api/posts/${id}/trace`);
+      if (d.logs.length === 0) { document.getElementById('traceBody').textContent = '기록이 없습니다.'; return; }
+      const label = { create: '작성', update: '수정 전 내용', delete: '삭제됨' };
+      document.getElementById('traceBody').innerHTML = d.logs.map((l) => {
+        let snap = '';
+        try { const s = JSON.parse(l.snapshot); snap = s.title ? `<b>${esc(s.title)}</b><br>${esc(s.content || '')}` : esc(l.snapshot); }
+        catch { snap = esc(l.snapshot || ''); }
+        return `<div class="comment"><span class="who">[${label[l.action] || l.action}]</span>
+          <span class="time">${esc(l.actor || '?')} · ${fmt(l.created_at)}</span>
+          <div style="white-space:pre-wrap;font-size:13px;color:var(--muted)">${snap}</div></div>`;
+      }).join('');
+      card.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    document.getElementById('commentForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const input = document.getElementById('commentInput');
+      try {
+        const r = await api.post(`/api/posts/${id}/comments`, { content: input.value });
+        input.value = '';
+        if (r.penalty) showMsg(document.getElementById('cmsg'), `⚠️ 비속어 감지 — 벌점 ${r.penalty.demerit}점 (상태: ${r.penalty.status})`);
+        else document.getElementById('cmsg').classList.add('hidden');
+        await load();
+      } catch (err) { showMsg(document.getElementById('cmsg'), err.message); }
+    });
+
+    await load();
+  </script>
+</body>
+</html>

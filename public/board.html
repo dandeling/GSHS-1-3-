@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>게시판 · GSHS 1-3</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <main>
+    <div class="card">
+      <div class="row">
+        <h1 id="title" class="grow" style="margin:0"></h1>
+        <a id="writeBtn" class="btn btn-sm hidden" href="#">✏️ 글쓰기</a>
+      </div>
+      <div id="resourceTabs" class="hidden">
+        <div class="tabs" id="subjectTabs"></div>
+        <div class="tabs" id="categoryTabs"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="tbl-scroll">
+        <table>
+          <thead>
+            <tr><th style="width:60px" class="center">번호</th><th>제목</th><th style="width:110px">작성자</th><th style="width:130px" class="nowrap">작성일</th><th style="width:60px" class="center">조회</th></tr>
+          </thead>
+          <tbody id="list"></tbody>
+        </table>
+      </div>
+      <div class="pager" id="pager"></div>
+    </div>
+  </main>
+  <script type="module">
+    import { renderNav, api, esc, fmt, qs } from '/js/common.js';
+    const me = await renderNav({ requireLogin: true });
+
+    const BOARD_NAMES = { notice: '📢 공지사항', free: '💬 자유게시판', resource: '📚 자료공유게시판' };
+    const board = qs('board') || 'free';
+    const subject = qs('subject');
+    const category = qs('category');
+    const page = parseInt(qs('page') || '1', 10);
+
+    document.getElementById('title').textContent = BOARD_NAMES[board] || '게시판';
+
+    // 글쓰기 버튼: 공지는 관리자만
+    const writeBtn = document.getElementById('writeBtn');
+    if (!(board === 'notice' && me.role !== 'admin')) {
+      writeBtn.classList.remove('hidden');
+      const wq = new URLSearchParams({ board });
+      if (subject) wq.set('subject', subject);
+      if (category) wq.set('category', category);
+      writeBtn.href = '/write.html?' + wq.toString();
+    }
+
+    // 자료 게시판: 과목/분류 탭
+    if (board === 'resource') {
+      const meta = await api.get('/api/meta');
+      document.getElementById('resourceTabs').classList.remove('hidden');
+      const st = document.getElementById('subjectTabs');
+      st.innerHTML = `<a href="/board.html?board=resource" class="${!subject ? 'active' : ''}">전체과목</a>` +
+        meta.subjects.map((s) => {
+          const q = new URLSearchParams({ board: 'resource', subject: s.code });
+          if (category) q.set('category', category);
+          return `<a href="/board.html?${q}" class="${subject === s.code ? 'active' : ''}">${esc(s.name)}</a>`;
+        }).join('');
+      const ct = document.getElementById('categoryTabs');
+      const baseCat = (c) => { const q = new URLSearchParams({ board: 'resource' }); if (subject) q.set('subject', subject); if (c) q.set('category', c); return q.toString(); };
+      ct.innerHTML = `<a href="/board.html?${baseCat('')}" class="${!category ? 'active' : ''}">전체분류</a>` +
+        meta.categories.map((c) => `<a href="/board.html?${baseCat(c.code)}" class="${category === c.code ? 'active' : ''}">${esc(c.name)}</a>`).join('');
+    }
+
+    // 목록 로드
+    const q = new URLSearchParams({ board, page });
+    if (subject) q.set('subject', subject);
+    if (category) q.set('category', category);
+    const data = await api.get('/api/posts?' + q.toString());
+
+    const list = document.getElementById('list');
+    if (data.posts.length === 0) {
+      list.innerHTML = `<tr><td colspan="5" class="center muted" style="padding:30px">글이 없습니다.</td></tr>`;
+    } else {
+      list.innerHTML = data.posts.map((p) => `
+        <tr class="post-row" onclick="location.href='/post.html?id=${p.id}'">
+          <td class="center muted">${p.id}</td>
+          <td>${esc(p.title)} ${p.comment_count > 0 ? `<span class="muted">[${p.comment_count}]</span>` : ''}</td>
+          <td>${esc(p.author)}</td>
+          <td class="nowrap muted">${fmt(p.created_at)}</td>
+          <td class="center muted">${p.views}</td>
+        </tr>`).join('');
+    }
+
+    // 페이지네이션
+    const pager = document.getElementById('pager');
+    const mkq = (pg) => { const c = new URLSearchParams({ board, page: pg }); if (subject) c.set('subject', subject); if (category) c.set('category', category); return '/board.html?' + c; };
+    let html = '';
+    for (let i = 1; i <= data.totalPages; i++) {
+      html += i === data.page ? `<span class="active">${i}</span>` : `<a href="${mkq(i)}">${i}</a>`;
+    }
+    pager.innerHTML = data.totalPages > 1 ? html : '';
+  </script>
+</body>
+</html>

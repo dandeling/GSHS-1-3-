@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>캘린더 · GSHS 1-3</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <main>
+    <div class="card">
+      <div class="row">
+        <button class="btn-ghost btn-sm" id="prev">‹</button>
+        <h1 id="ym" class="grow center" style="margin:0"></h1>
+        <button class="btn-ghost btn-sm" id="next">›</button>
+        <button class="btn-sm hidden" id="addBtn">＋ 일정 추가</button>
+      </div>
+      <p class="muted" id="hint" style="margin-top:8px"></p>
+    </div>
+    <div class="card">
+      <div class="cal-grid" id="cal"></div>
+    </div>
+    <div class="card hidden" id="listCard">
+      <h2>이번 달 일정</h2>
+      <div id="evList"></div>
+    </div>
+  </main>
+
+  <script type="module">
+    import { renderNav, api, esc, qs } from '/js/common.js';
+    const me = await renderNav({ requireLogin: true });
+    const isAdmin = me.role === 'admin';
+    if (isAdmin) {
+      document.getElementById('addBtn').classList.remove('hidden');
+      document.getElementById('hint').textContent = '관리자는 날짜 칸을 눌러 일정을 추가할 수 있습니다.';
+    } else {
+      document.getElementById('hint').textContent = '일정은 관리자만 추가·수정·삭제할 수 있습니다.';
+    }
+
+    const now = new Date();
+    let year = parseInt(qs('year') || now.getFullYear(), 10);
+    let month = parseInt(qs('month') || (now.getMonth() + 1), 10);
+
+    async function load() {
+      const d = await api.get(`/api/calendar?year=${year}&month=${month}`);
+      const events = d.events;
+      document.getElementById('ym').textContent = `${year}년 ${month}월`;
+
+      const byDay = {};
+      for (const e of events) { const day = parseInt(e.event_date.slice(8, 10), 10); (byDay[day] ||= []).push(e); }
+
+      const first = new Date(year, month - 1, 1).getDay();
+      const days = new Date(year, month, 0).getDate();
+      const cal = document.getElementById('cal');
+      const heads = ['일', '월', '화', '수', '목', '금', '토'];
+      let html = heads.map((h) => `<div class="cal-cell head">${h}</div>`).join('');
+      for (let i = 0; i < first; i++) html += `<div class="cal-cell empty"></div>`;
+      const today = new Date();
+      for (let day = 1; day <= days; day++) {
+        const isToday = today.getFullYear() === year && today.getMonth() + 1 === month && today.getDate() === day;
+        const evs = (byDay[day] || []).map((e) =>
+          `<div class="cal-ev" data-ev='${esc(JSON.stringify(e))}' title="${esc(e.title)}">${esc(e.title)}</div>`).join('');
+        const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        html += `<div class="cal-cell ${isToday ? 'today' : ''}" data-date="${dateStr}">
+          <span class="cal-day">${day}</span>${evs}</div>`;
+      }
+      cal.innerHTML = html;
+
+      // 일정 클릭 → 상세/수정
+      cal.querySelectorAll('.cal-ev').forEach((el) => el.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        openEvent(JSON.parse(el.dataset.ev));
+      }));
+      // 빈 칸 클릭 → 관리자 추가
+      if (isAdmin) cal.querySelectorAll('.cal-cell[data-date]').forEach((el) => el.addEventListener('click', () => addEvent(el.dataset.date)));
+
+      // 리스트
+      const listCard = document.getElementById('listCard');
+      if (events.length) {
+        listCard.classList.remove('hidden');
+        document.getElementById('evList').innerHTML = events.map((e) => `
+          <div class="comment"><span class="who">${esc(e.event_date)}</span> · ${esc(e.title)}
+          ${e.description ? `<div class="muted" style="white-space:pre-wrap">${esc(e.description)}</div>` : ''}</div>`).join('');
+      } else { listCard.classList.add('hidden'); }
+    }
+
+    function openEvent(e) {
+      let text = `📅 ${e.event_date}\n${e.title}\n\n${e.description || ''}\n\n작성: ${e.author}`;
+      if (isAdmin) {
+        if (confirm(text + '\n\n[확인]=수정  [취소]=닫기')) editEvent(e);
+      } else { alert(text); }
+    }
+
+    async function addEvent(date) {
+      const title = prompt(`[${date}] 일정 제목:`); if (!title) return;
+      const desc = prompt('설명(선택):') || '';
+      await api.post('/api/calendar', { title, description: desc, event_date: date });
+      load();
+    }
+    async function editEvent(e) {
+      const title = prompt('제목:', e.title); if (title === null) return;
+      const desc = prompt('설명:', e.description || '');
+      const date = prompt('날짜(YYYY-MM-DD):', e.event_date); if (!date) return;
+      if (confirm('이 일정을 삭제하려면 [확인], 수정하려면 [취소]')) {
+        await api.del('/api/calendar/' + e.id);
+      } else {
+        await api.put('/api/calendar/' + e.id, { title, description: desc, event_date: date });
+      }
+      load();
+    }
+
+    document.getElementById('addBtn').addEventListener('click', () => {
+      const date = prompt('날짜(YYYY-MM-DD):', `${year}-${String(month).padStart(2, '0')}-01`);
+      if (date) addEvent(date);
+    });
+    document.getElementById('prev').addEventListener('click', () => { month--; if (month < 1) { month = 12; year--; } load(); });
+    document.getElementById('next').addEventListener('click', () => { month++; if (month > 12) { month = 1; year++; } load(); });
+
+    await load();
+  </script>
+</body>
+</html>
