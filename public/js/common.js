@@ -95,6 +95,7 @@ export async function renderNav(opts = {}) {
     ${authed ? '<a class="sb-link" href="/notifications.html"><span class="e">🔔</span> 알림</a>' : ''}
     ${authed ? '<a class="sb-link" href="/dm.html"><span class="e">✉️</span> 쪽지</a>' : ''}
     ${authed ? '<a class="sb-link" href="/ranking.html"><span class="e">🏆</span> 랭킹</a>' : ''}
+    ${authed ? '<a class="sb-link" href="/inquiries.html"><span class="e">💌</span> 문의사항</a>' : ''}
     <a class="sb-link" href="/board.html?board=notice"><span class="e">📢</span> 공지사항</a>
     <a class="sb-link" href="/board.html?board=resource"><span class="e">📚</span> 자료공유</a>
     <a class="sb-link" href="/chat.html"><span class="e">⚡</span> 반 채팅방</a>

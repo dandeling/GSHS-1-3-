@@ -16,7 +16,7 @@
   <script type="module">
     import { renderNav, api, esc, fmt } from '/js/common.js';
     await renderNav({ requireLogin: true });
-    const ICON = { comment: '💬', reply: '↪️', like: '❤️', mention: '@', dm: '✉️' };
+    const ICON = { comment: '💬', reply: '↪️', like: '❤️', mention: '@', dm: '✉️', inquiry: '💌' };
 
     async function load() {
       const d = await api.get('/api/notifications');
@@ -33,6 +33,7 @@
       box.querySelectorAll('.notif-item').forEach((el) => el.addEventListener('click', async () => {
         await api.post('/api/notifications/' + el.dataset.id + '/read');
         if (el.dataset.type === 'dm' && el.dataset.actor) location.href = '/dm.html?u=' + encodeURIComponent(el.dataset.actor);
+        else if (el.dataset.type === 'inquiry') location.href = '/inquiries.html';
         else if (el.dataset.post) location.href = '/post.html?id=' + el.dataset.post;
         else location.reload();
       }));

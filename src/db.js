@@ -191,6 +191,20 @@ CREATE TABLE IF NOT EXISTS reactions (
   PRIMARY KEY (post_id, user_id)
 );
 
+-- 문의사항 (1:1 문의 → 관리자 답변)
+CREATE TABLE IF NOT EXISTS inquiries (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id     INTEGER NOT NULL,
+  title       TEXT NOT NULL,
+  content     TEXT NOT NULL,
+  answer      TEXT,
+  status      TEXT NOT NULL DEFAULT 'open',  -- open(답변대기) | answered(답변완료)
+  is_secret   INTEGER NOT NULL DEFAULT 1,     -- 1이면 작성자·관리자만 열람
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  answered_at TEXT,
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_posts_board ON posts(board, subject, category);
 CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(post_id);
 CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_logs(entity_type, entity_id);
