@@ -1,5 +1,7 @@
 import express from 'express';
-import db, { logAudit, addPoint } from '../db.js';
+import db, { logAudit, addPoint, notify, notifyMentions } from '../db.js';
+
+const REACTIONS = ['👍', '😂', '😮', '😢', '🔥', '👏'];
 import { requireAuth } from '../middleware.js';
 import { addDemerit } from '../middleware.js';
 import { countBadwords } from '../badwords.js';
@@ -89,7 +91,31 @@ router.get('/:id', requireAuth, (req, res) => {
   post.like_count = db.prepare('SELECT COUNT(*) c FROM likes WHERE post_id=?').get(post.id).c;
   post.liked = !!db.prepare('SELECT 1 FROM likes WHERE post_id=? AND user_id=?').get(post.id, req.user.id);
 
-  res.json({ post, comments, poll: loadPoll(post.id, req.user.id), me: { id: req.user.id, role: req.user.role } });
+  res.json({ post, comments, poll: loadPoll(post.id, req.user.id), reactions: loadReactions(post.id, req.user.id), me: { id: req.user.id, role: req.user.role } });
+});
+
+// 이모지 반응 요약
+function loadReactions(postId, userId) {
+  const counts = db.prepare('SELECT emoji, COUNT(*) c FROM reactions WHERE post_id=? GROUP BY emoji').all(postId);
+  const map = {}; counts.forEach((r) => { map[r.emoji] = r.c; });
+  const mine = db.prepare('SELECT emoji FROM reactions WHERE post_id=? AND user_id=?').get(postId, userId);
+  return { emojis: REACTIONS, counts: map, mine: mine?.emoji || null };
+}
+
+// 이모지 반응 (같은 이모지 누르면 취소, 다른 이모지면 변경)
+router.post('/:id/react', requireAuth, (req, res) => {
+  const post = db.prepare('SELECT id FROM posts WHERE id=? AND deleted_at IS NULL').get(req.params.id);
+  if (!post) return res.status(404).json({ error: '글을 찾을 수 없습니다.' });
+  const { emoji } = req.body || {};
+  if (!REACTIONS.includes(emoji)) return res.status(400).json({ error: '지원하지 않는 반응입니다.' });
+  const cur = db.prepare('SELECT emoji FROM reactions WHERE post_id=? AND user_id=?').get(post.id, req.user.id);
+  if (cur && cur.emoji === emoji) {
+    db.prepare('DELETE FROM reactions WHERE post_id=? AND user_id=?').run(post.id, req.user.id);
+  } else {
+    db.prepare(`INSERT INTO reactions (post_id, user_id, emoji) VALUES (?, ?, ?)
+      ON CONFLICT(post_id, user_id) DO UPDATE SET emoji=excluded.emoji`).run(post.id, req.user.id, emoji);
+  }
+  res.json({ ok: true, reactions: loadReactions(post.id, req.user.id) });
 });
 
 // 게시글의 투표 정보 로드 (없으면 null)
@@ -128,7 +154,7 @@ router.post('/:id/like', requireAuth, (req, res) => {
     if (full.author_id !== req.user.id) addPoint(full.author_id, -1);
   } else {
     db.prepare('INSERT INTO likes (post_id, user_id) VALUES (?, ?)').run(post.id, req.user.id);
-    if (full.author_id !== req.user.id) addPoint(full.author_id, 1); // 받은 추천 +1
+    if (full.author_id !== req.user.id) { addPoint(full.author_id, 1); notify(full.author_id, req.user.id, 'like', post.id, '회원님의 글을 좋아합니다 ❤'); }
   }
   const count = db.prepare('SELECT COUNT(*) c FROM likes WHERE post_id=?').get(post.id).c;
   res.json({ ok: true, liked: !liked, like_count: count });
@@ -161,6 +187,7 @@ router.post('/', requireAuth, (req, res) => {
 
   logAudit('post', info.lastInsertRowid, 'create', JSON.stringify({ title, content }), req.user.id);
   addPoint(req.user.id, 5); // 글 작성 +5
+  notifyMentions(content, req.user.id, info.lastInsertRowid);
 
   // 투표 첨부 (자유게시판)
   const poll = req.body?.poll;
@@ -247,6 +274,15 @@ router.post('/:id/comments', requireAuth, (req, res) => {
     .run(post.id, req.user.id, content.trim(), parent);
   logAudit('comment', info.lastInsertRowid, 'create', content, req.user.id);
   addPoint(req.user.id, 2); // 댓글 작성 +2
+
+  // 알림: 글 작성자에게(댓글) + 부모 댓글 작성자에게(답글) + 멘션
+  const postRow = db.prepare('SELECT author_id, title FROM posts WHERE id=?').get(post.id);
+  notify(postRow.author_id, req.user.id, 'comment', post.id, `내 글에 댓글: "${content.slice(0, 40)}"`);
+  if (parent) {
+    const pc = db.prepare('SELECT author_id FROM comments WHERE id=?').get(parent);
+    if (pc) notify(pc.author_id, req.user.id, 'reply', post.id, `내 댓글에 답글: "${content.slice(0, 40)}"`);
+  }
+  notifyMentions(content, req.user.id, post.id);
   res.json({ ok: true, id: info.lastInsertRowid, penalty });
 });
 

@@ -161,11 +161,43 @@ CREATE TABLE IF NOT EXISTS poll_votes (
   FOREIGN KEY (poll_id) REFERENCES polls(id)
 );
 
+-- 알림
+CREATE TABLE IF NOT EXISTS notifications (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id     INTEGER NOT NULL,            -- 받는 사람
+  type        TEXT NOT NULL,               -- comment|reply|like|mention|dm
+  actor       TEXT,                        -- 행위자 별명
+  post_id     INTEGER,
+  text        TEXT,
+  is_read     INTEGER NOT NULL DEFAULT 0,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- 쪽지(DM)
+CREATE TABLE IF NOT EXISTS dm_messages (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  sender_id    INTEGER NOT NULL,
+  recipient_id INTEGER NOT NULL,
+  content      TEXT NOT NULL,
+  is_read      INTEGER NOT NULL DEFAULT 0,
+  created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- 이모지 반응 (1인 1반응)
+CREATE TABLE IF NOT EXISTS reactions (
+  post_id  INTEGER NOT NULL,
+  user_id  INTEGER NOT NULL,
+  emoji    TEXT NOT NULL,
+  PRIMARY KEY (post_id, user_id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_posts_board ON posts(board, subject, category);
 CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(post_id);
 CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_logs(entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_likes_post ON likes(post_id);
 CREATE INDEX IF NOT EXISTS idx_chats_room ON chats(id);
+CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, is_read);
+CREATE INDEX IF NOT EXISTS idx_dm_pair ON dm_messages(sender_id, recipient_id);
 `);
 
 // 기본 채팅방 시딩
@@ -207,6 +239,26 @@ if (!roomCols.includes('password')) db.exec("ALTER TABLE chat_rooms ADD COLUMN p
 export function addPoint(userId, n) {
   if (!userId) return;
   db.prepare('UPDATE users SET point = MAX(0, point + ?) WHERE id = ?').run(n, userId);
+}
+
+// 알림 생성 (본인에게는 알림 X)
+export function notify(userId, actorId, type, postId, text) {
+  if (!userId || userId === actorId) return;
+  const actor = actorId ? (db.prepare('SELECT username FROM users WHERE id=?').get(actorId)?.username || null) : null;
+  db.prepare('INSERT INTO notifications (user_id, type, actor, post_id, text) VALUES (?, ?, ?, ?, ?)')
+    .run(userId, type, actor, postId ?? null, text ?? null);
+}
+
+// 본문 속 @별명 멘션 → 해당 사용자에게 알림
+export function notifyMentions(content, actorId, postId) {
+  if (!content) return;
+  const seen = new Set();
+  for (const m of content.matchAll(/@([\w가-힣]{1,20})/g)) {
+    const name = m[1];
+    if (seen.has(name)) continue; seen.add(name);
+    const u = db.prepare('SELECT id FROM users WHERE username=?').get(name);
+    if (u) notify(u.id, actorId, 'mention', postId, `회원님을 언급했어요: "${content.slice(0, 40)}"`);
+  }
 }
 
 // ---- 기본 관리자 계정 시딩 ----

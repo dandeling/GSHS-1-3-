@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>랭킹 · 1-3반 커뮤니티</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <main>
+    <div class="card">
+      <h1>🏆 활동 랭킹</h1>
+      <div class="pills" id="tabs">
+        <span class="pill active" data-by="point">🌱 활동점수</span>
+        <span class="pill" data-by="likes">❤️ 받은 추천</span>
+        <span class="pill" data-by="posts">📝 작성글</span>
+        <span class="pill" data-by="attendance">📅 출석</span>
+      </div>
+      <div id="list" style="margin-top:8px">불러오는 중…</div>
+    </div>
+  </main>
+  <script type="module">
+    import { renderNav, api, esc, levelBadge } from '/js/common.js';
+    await renderNav({ requireLogin: true });
+    let by = 'point';
+    const UNIT = { point: '점', likes: '개', posts: '개', attendance: '일' };
+    const medal = ['🥇','🥈','🥉'];
+
+    async function load() {
+      const d = await api.get('/api/users/ranking?by=' + by);
+      const box = document.getElementById('list');
+      if (!d.ranking.length) { box.innerHTML = '<div class="empty">아직 랭킹이 없어요.</div>'; return; }
+      box.innerHTML = d.ranking.map((u, i) => `
+        <div class="rank-row ${i<3?'top'+(i+1):''}" onclick="location.href='/profile.html?u=${encodeURIComponent(u.username).replace(/'/g,'%27')}'" style="cursor:pointer">
+          <div class="rk">${i<3?medal[i]:(i+1)}</div>
+          <div class="rn">${esc(u.username)} ${levelBadge(u.point, u.role)}</div>
+          <div class="rs">${u.score}${UNIT[by]}</div>
+        </div>`).join('');
+    }
+    document.querySelectorAll('#tabs .pill').forEach((p) => p.addEventListener('click', () => {
+      document.querySelectorAll('#tabs .pill').forEach((x) => x.classList.remove('active'));
+      p.classList.add('active'); by = p.dataset.by; load();
+    }));
+    await load();
+  </script>
+</body>
+</html>

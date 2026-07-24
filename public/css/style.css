@@ -261,6 +261,41 @@ th { color: var(--muted); font-size: 12px; font-weight: 700; }
 .prose p { margin: 8px 0; color: var(--text); }
 .prose ul { padding-left: 20px; } .prose li { margin: 5px 0; }
 
+/* ===== 알림 배지 ===== */
+.notif-dot { position: absolute; top: -3px; right: -3px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 999px; background: var(--danger); color: #fff; font-size: 10px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+.notif-item { display: flex; gap: 10px; padding: 12px 6px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.notif-item.unread { background: color-mix(in srgb, var(--green) 7%, transparent); }
+.notif-item .ni-ico { font-size: 20px; flex: none; }
+.notif-item .ni-body { flex: 1; min-width: 0; }
+.notif-item .ni-actor { font-weight: 800; }
+.notif-item .ni-text { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ===== 이모지 반응 ===== */
+.react-bar { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 14px; }
+.react-btn { background: var(--chip); border: 1.5px solid var(--line-2); border-radius: 999px; padding: 5px 12px; font-size: 14px; font-weight: 700; cursor: pointer; }
+.react-btn:hover { border-color: var(--ink); }
+.react-btn.on { background: color-mix(in srgb, var(--green) 15%, var(--card)); border-color: var(--green); }
+.react-btn .rc { color: var(--muted); font-size: 12px; margin-left: 3px; }
+
+/* ===== 뱃지(업적) ===== */
+.badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.ach { display: inline-flex; align-items: center; gap: 5px; background: var(--accent); border: 1px solid var(--line-2); border-radius: 999px; padding: 6px 12px; font-size: 12.5px; font-weight: 700; }
+.ach .e { font-size: 15px; }
+
+/* ===== 쪽지(DM) ===== */
+.dm-conv { display: flex; gap: 12px; align-items: center; padding: 12px 6px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.dm-conv:hover { background: var(--accent); }
+.dm-conv .av { width: 42px; height: 42px; border-radius: 50%; background: var(--ink); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 800; flex: none; }
+.dm-conv .last { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dm-unread { background: var(--danger); color: #fff; border-radius: 999px; font-size: 11px; font-weight: 800; padding: 1px 7px; }
+
+/* ===== 랭킹 ===== */
+.rank-row { display: flex; gap: 12px; align-items: center; padding: 11px 6px; border-bottom: 1px solid var(--line); }
+.rank-row .rk { font-weight: 900; font-size: 17px; width: 30px; text-align: center; color: var(--muted); }
+.rank-row.top1 .rk, .rank-row.top2 .rk, .rank-row.top3 .rk { font-size: 20px; }
+.rank-row .rn { font-weight: 700; flex: 1; }
+.rank-row .rs { font-weight: 800; color: var(--green); }
+
 /* ===== D-day 위젯 ===== */
 .dday-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .dday-chip { background: color-mix(in srgb, var(--ink) 8%, var(--card)); border: 1px solid var(--line-2); border-radius: 999px; padding: 6px 13px; font-size: 13px; font-weight: 700; }

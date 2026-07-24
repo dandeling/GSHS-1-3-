@@ -59,9 +59,11 @@
         <div id="pollBox"></div>
         <div style="text-align:center;margin-top:22px">
           <button class="like-btn ${p.liked?'on':''}" id="likeBtn">❤ 좋아요 <span id="likeCount">${p.like_count}</span></button>
-        </div>`;
+        </div>
+        <div class="react-bar" id="reactBar"></div>`;
 
       renderPoll();
+      renderReactions();
 
       document.getElementById('likeBtn').addEventListener('click', async () => {
         const r = await api.post(`/api/posts/${id}/like`);
@@ -74,6 +76,20 @@
       });
       if (me.role === 'admin') document.getElementById('traceBtn').addEventListener('click', loadTrace);
       renderComments();
+    }
+
+    function renderReactions() {
+      const bar = document.getElementById('reactBar');
+      if (!bar || !data.reactions) return;
+      const r = data.reactions;
+      bar.innerHTML = r.emojis.map((e) => {
+        const cnt = r.counts[e] || 0;
+        return `<button class="react-btn ${r.mine===e?'on':''}" data-emoji="${e}">${e}${cnt?`<span class="rc">${cnt}</span>`:''}</button>`;
+      }).join('');
+      bar.querySelectorAll('[data-emoji]').forEach((b) => b.addEventListener('click', async () => {
+        const res = await api.post(`/api/posts/${id}/react`, { emoji: b.dataset.emoji });
+        data.reactions = res.reactions; renderReactions();
+      }));
     }
 
     function renderPoll() {

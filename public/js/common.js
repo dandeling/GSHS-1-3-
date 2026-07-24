@@ -63,6 +63,7 @@ export async function renderNav(opts = {}) {
   bar.innerHTML = `<div class="topbar-inner">
     <button class="icon-btn" id="menuBtn" aria-label="메뉴">☰</button>
     <span class="title">1-3반 <small>커뮤니티</small></span>
+    ${me ? `<a class="icon-btn" id="bellBtn" href="/notifications.html" aria-label="알림" style="position:relative">🔔<span class="notif-dot hidden" id="notifDot"></span></a>` : ''}
     <button class="icon-btn" id="themeBtn" aria-label="테마">🌙</button>
   </div>`;
   document.body.prepend(bar);
@@ -91,6 +92,9 @@ export async function renderNav(opts = {}) {
     <a class="sb-link" href="/board.html?board=free&sort=popular"><span class="e">🔥</span> 인기글</a>
     ${authed ? '<a class="sb-link" href="/write.html?board=free"><span class="e">✏️</span> 글쓰기</a>' : ''}
     ${authed ? '<a class="sb-link" href="/profile.html"><span class="e">👤</span> 내 프로필</a>' : ''}
+    ${authed ? '<a class="sb-link" href="/notifications.html"><span class="e">🔔</span> 알림</a>' : ''}
+    ${authed ? '<a class="sb-link" href="/dm.html"><span class="e">✉️</span> 쪽지</a>' : ''}
+    ${authed ? '<a class="sb-link" href="/ranking.html"><span class="e">🏆</span> 랭킹</a>' : ''}
     <a class="sb-link" href="/board.html?board=notice"><span class="e">📢</span> 공지사항</a>
     <a class="sb-link" href="/board.html?board=resource"><span class="e">📚</span> 자료공유</a>
     <a class="sb-link" href="/chat.html"><span class="e">⚡</span> 반 채팅방</a>
@@ -138,6 +142,20 @@ export async function renderNav(opts = {}) {
   document.getElementById('themeBtn').addEventListener('click', toggleTheme);
   const lo = document.getElementById('logoutLink');
   if (lo) lo.addEventListener('click', async (e) => { e.preventDefault(); await api.post('/api/auth/logout'); location.href = '/login.html'; });
+
+  // 안읽은 알림/쪽지 배지
+  if (me) {
+    const refreshBadge = async () => {
+      try {
+        const c = await api.get('/api/notifications/count');
+        const dot = document.getElementById('notifDot');
+        if (dot) dot.classList.toggle('hidden', (c.total || 0) === 0);
+        if (dot && c.total > 0) dot.textContent = c.total > 9 ? '9+' : c.total;
+      } catch {}
+    };
+    refreshBadge();
+    setInterval(refreshBadge, 30000);
+  }
 
   return me;
 }

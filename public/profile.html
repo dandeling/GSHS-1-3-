@@ -18,6 +18,22 @@
     const meta = await getMeta();
     const uname = qs('u') || me.username;
 
+    // 업적 뱃지 계산 (통계 기반)
+    function badges(s, u) {
+      const b = [];
+      if (u.role === 'admin') b.push({ e:'👑', n:'운영자' });
+      if (s.postCount >= 1) b.push({ e:'🎉', n:'첫 글' });
+      if (s.postCount >= 10) b.push({ e:'✍️', n:'글 10개' });
+      if (s.postCount >= 50) b.push({ e:'📚', n:'글 50개' });
+      if (s.commentCount >= 30) b.push({ e:'💬', n:'댓글왕' });
+      if (s.likeReceived >= 10) b.push({ e:'🔥', n:'인기글' });
+      if (s.likeReceived >= 50) b.push({ e:'⭐', n:'인기왕' });
+      if (s.attendance >= 7) b.push({ e:'📅', n:'개근 7일' });
+      if (s.attendance >= 30) b.push({ e:'🏆', n:'개근 30일' });
+      if (u.point >= 200) b.push({ e:'💎', n:'정회원' });
+      return b;
+    }
+
     try {
       const d = await api.get('/api/users/' + encodeURIComponent(uname) + '/profile');
       const u = d.user, s = d.stats;
@@ -37,7 +53,11 @@
           <div class="stat-box"><div class="n">${s.commentCount}</div><div class="l">댓글</div></div>
           <div class="stat-box"><div class="n">${s.likeReceived}</div><div class="l">받은 추천</div></div>
           <div class="stat-box"><div class="n">${s.attendance}</div><div class="l">출석일</div></div>
-        </div>`;
+        </div>
+        <div class="badges">${badges(s, u).map((b)=>`<span class="ach"><span class="e">${b.e}</span>${b.n}</span>`).join('') || '<span class="muted" style="font-size:12px">아직 획득한 뱃지가 없어요.</span>'}</div>
+        ${!d.isMe ? `<button id="dmBtn" style="margin-top:14px">✉️ 쪽지 보내기</button>` : ''}`;
+
+      if (!d.isMe) document.getElementById('dmBtn').addEventListener('click', () => location.href = '/dm.html?u=' + encodeURIComponent(u.username));
 
       const tagName = (c) => { const t = meta.tags.find((x)=>x.code===c); return t?`${t.emoji} ${t.name}`:''; };
       const subName = (c) => { const x = meta.subjects.find((y)=>y.code===c); return x?x.name:''; };

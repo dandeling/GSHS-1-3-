@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>알림 · 1-3반 커뮤니티</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <main>
+    <div class="card">
+      <div class="row"><h1 class="grow" style="margin:0">🔔 알림</h1><button id="readAll" class="btn-sm btn-ghost">모두 읽음</button></div>
+      <div id="list" style="margin-top:10px">불러오는 중…</div>
+    </div>
+  </main>
+  <script type="module">
+    import { renderNav, api, esc, fmt } from '/js/common.js';
+    await renderNav({ requireLogin: true });
+    const ICON = { comment: '💬', reply: '↪️', like: '❤️', mention: '@', dm: '✉️' };
+
+    async function load() {
+      const d = await api.get('/api/notifications');
+      const box = document.getElementById('list');
+      if (!d.notifications.length) { box.innerHTML = '<div class="empty">아직 알림이 없어요.</div>'; return; }
+      box.innerHTML = d.notifications.map((n) => `
+        <div class="notif-item ${n.is_read?'':'unread'}" data-id="${n.id}" data-post="${n.post_id||''}" data-type="${n.type}" data-actor="${esc(n.actor||'')}">
+          <div class="ni-ico">${ICON[n.type]||'🔔'}</div>
+          <div class="ni-body">
+            <div><span class="ni-actor">${esc(n.actor||'알림')}</span> <span class="muted" style="font-size:11px">${fmt(n.created_at)}</span></div>
+            <div class="ni-text">${esc(n.text||'')}</div>
+          </div>
+        </div>`).join('');
+      box.querySelectorAll('.notif-item').forEach((el) => el.addEventListener('click', async () => {
+        await api.post('/api/notifications/' + el.dataset.id + '/read');
+        if (el.dataset.type === 'dm' && el.dataset.actor) location.href = '/dm.html?u=' + encodeURIComponent(el.dataset.actor);
+        else if (el.dataset.post) location.href = '/post.html?id=' + el.dataset.post;
+        else location.reload();
+      }));
+    }
+    document.getElementById('readAll').addEventListener('click', async () => { await api.post('/api/notifications/read'); load(); });
+    await load();
+  </script>
+</body>
+</html>

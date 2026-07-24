@@ -4,6 +4,29 @@ import { requireAuth } from '../middleware.js';
 
 const router = express.Router();
 
+// 전체 랭킹: by=point|likes|attendance|posts
+router.get('/ranking', requireAuth, (req, res) => {
+  const by = req.query.by || 'point';
+  let rows;
+  if (by === 'likes') {
+    rows = db.prepare(`SELECT u.username, u.point, u.role,
+      (SELECT COUNT(*) FROM likes l JOIN posts p ON p.id=l.post_id WHERE p.author_id=u.id) AS score
+      FROM users u WHERE u.role!='admin' ORDER BY score DESC, u.point DESC LIMIT 20`).all();
+  } else if (by === 'attendance') {
+    rows = db.prepare(`SELECT u.username, u.point, u.role,
+      (SELECT COUNT(*) FROM attendance a WHERE a.user_id=u.id) AS score
+      FROM users u WHERE u.role!='admin' ORDER BY score DESC, u.point DESC LIMIT 20`).all();
+  } else if (by === 'posts') {
+    rows = db.prepare(`SELECT u.username, u.point, u.role,
+      (SELECT COUNT(*) FROM posts p WHERE p.author_id=u.id AND p.deleted_at IS NULL) AS score
+      FROM users u WHERE u.role!='admin' ORDER BY score DESC, u.point DESC LIMIT 20`).all();
+  } else {
+    rows = db.prepare(`SELECT u.username, u.point, u.role, u.point AS score
+      FROM users u WHERE u.role!='admin' ORDER BY u.point DESC LIMIT 20`).all();
+  }
+  res.json({ by, ranking: rows });
+});
+
 // 프로필 조회 (별명 기준). 실명은 노출하지 않음.
 router.get('/:username/profile', requireAuth, (req, res) => {
   const u = db.prepare('SELECT id, username, role, point, created_at FROM users WHERE username=?').get(req.params.username);
