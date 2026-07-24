@@ -3,8 +3,63 @@ import bcrypt from 'bcryptjs';
 import db from '../db.js';
 import { SCHOOL_EMAIL_REGEX } from '../constants.js';
 import { issueSession, clearSession, loadUser, requireAuth } from '../middleware.js';
+import { mailEnabled, sendCodeMail } from '../mailer.js';
 
 const router = express.Router();
+
+// 이메일 인증 사용 여부 (프론트에서 UI 분기)
+router.get('/mail-status', (req, res) => res.json({ enabled: mailEnabled() }));
+
+// 인증코드 발송 (purpose: register | reset)
+router.post('/send-code', async (req, res) => {
+  if (!mailEnabled()) return res.status(400).json({ error: '이메일 인증이 설정되지 않았습니다.' });
+  const { email, purpose } = req.body || {};
+  const p = purpose === 'reset' ? 'reset' : 'register';
+  if (!email || !SCHOOL_EMAIL_REGEX.test(email)) return res.status(400).json({ error: '학교 이메일 형식을 확인하세요.' });
+
+  const existing = db.prepare('SELECT id FROM users WHERE email=?').get(email);
+  if (p === 'register' && existing) return res.status(409).json({ error: '이미 가입된 이메일입니다.' });
+  if (p === 'reset' && !existing) return res.status(404).json({ error: '가입되지 않은 이메일입니다.' });
+
+  // 재발송 제한: 60초
+  const prev = db.prepare('SELECT created_at FROM email_codes WHERE email=? AND purpose=?').get(email, p);
+  if (prev && (Date.now() - new Date(prev.created_at + 'Z').getTime()) < 60 * 1000) {
+    return res.status(429).json({ error: '잠시 후 다시 시도해주세요. (1분에 한 번)' });
+  }
+
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  const expires = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+  db.prepare(`INSERT INTO email_codes (email, purpose, code, verified, expires_at, created_at)
+    VALUES (?, ?, ?, 0, ?, datetime('now'))
+    ON CONFLICT(email, purpose) DO UPDATE SET code=excluded.code, verified=0, expires_at=excluded.expires_at, created_at=datetime('now')`)
+    .run(email, p, code, expires);
+  try {
+    await sendCodeMail(email, code, p);
+    res.json({ ok: true, message: '인증코드를 이메일로 보냈어요. (10분 유효)' });
+  } catch (e) {
+    res.status(500).json({ error: '메일 발송에 실패했어요. 잠시 후 다시 시도해주세요.' });
+  }
+});
+
+// 인증코드 확인
+router.post('/verify-code', (req, res) => {
+  const { email, code, purpose } = req.body || {};
+  const p = purpose === 'reset' ? 'reset' : 'register';
+  const row = db.prepare('SELECT * FROM email_codes WHERE email=? AND purpose=?').get(email, p);
+  if (!row || row.code !== String(code || '').trim()) return res.status(400).json({ error: '인증코드가 올바르지 않습니다.' });
+  if (new Date(row.expires_at) < new Date()) return res.status(400).json({ error: '인증코드가 만료됐어요. 다시 받아주세요.' });
+  db.prepare('UPDATE email_codes SET verified=1 WHERE email=? AND purpose=?').run(email, p);
+  res.json({ ok: true });
+});
+
+// 인증코드가 확인된 상태인지 검사 (내부용)
+function codeVerified(email, purpose) {
+  const row = db.prepare('SELECT * FROM email_codes WHERE email=? AND purpose=?').get(email, purpose);
+  return row && row.verified === 1 && new Date(row.expires_at) >= new Date();
+}
+function clearCode(email, purpose) {
+  db.prepare('DELETE FROM email_codes WHERE email=? AND purpose=?').run(email, purpose);
+}
 
 // 회원가입
 router.post('/register', (req, res) => {
@@ -27,11 +82,17 @@ router.post('/register', (req, res) => {
   const dupName = db.prepare('SELECT id FROM users WHERE username=?').get(username);
   if (dupName) return res.status(409).json({ error: '이미 사용 중인 별명입니다.' });
 
+  // 이메일 인증이 켜져 있으면 인증코드 확인 필수
+  if (mailEnabled() && !codeVerified(email, 'register')) {
+    return res.status(400).json({ error: '이메일 인증을 먼저 완료해주세요.' });
+  }
+
   const hash = bcrypt.hashSync(password, 10);
   db.prepare(`
     INSERT INTO users (email, username, realname, grade, student_id, password, role, status)
     VALUES (?, ?, ?, ?, ?, ?, 'user', 'pending')
   `).run(email, username, realname, grade, studentId, hash);
+  clearCode(email, 'register');
 
   res.json({ ok: true, message: '가입 신청 완료! 관리자 승인 후 이용할 수 있습니다.' });
 });
@@ -85,19 +146,27 @@ router.post('/find-id', (req, res) => {
   res.json({ ok: true, username: user.username, status: user.status });
 });
 
-// 비밀번호 재설정: 이메일 + 실명 본인확인 → 새 비밀번호
+// 비밀번호 재설정
+//  - 이메일 인증이 켜져 있으면: 이메일 인증코드로 본인확인
+//  - 아니면: 이메일 + 실명 본인확인
 router.post('/reset-password', (req, res) => {
   const { email, realname, newPassword } = req.body || {};
-  if (!email || !realname || !newPassword) return res.status(400).json({ error: '모든 항목을 입력하세요.' });
+  if (!email || !newPassword) return res.status(400).json({ error: '모든 항목을 입력하세요.' });
   if (String(newPassword).length < 6) return res.status(400).json({ error: '새 비밀번호는 6자 이상이어야 합니다.' });
   const user = db.prepare('SELECT * FROM users WHERE email=?').get(email);
-  // 정보 노출 방지: 이메일/실명 어느 쪽이 틀려도 동일 메시지
-  if (!user || user.realname !== String(realname).trim()) {
-    return res.status(400).json({ error: '이메일과 실명이 일치하지 않습니다.' });
-  }
+  if (!user) return res.status(400).json({ error: '가입되지 않은 이메일입니다.' });
   if (user.role === 'admin') return res.status(400).json({ error: '관리자 계정은 이 방법으로 재설정할 수 없습니다.' });
+
+  if (mailEnabled()) {
+    if (!codeVerified(email, 'reset')) return res.status(400).json({ error: '이메일 인증을 먼저 완료해주세요.' });
+  } else {
+    if (!realname || user.realname !== String(realname).trim()) {
+      return res.status(400).json({ error: '이메일과 실명이 일치하지 않습니다.' });
+    }
+  }
   const hash = bcrypt.hashSync(String(newPassword), 10);
   db.prepare('UPDATE users SET password=? WHERE id=?').run(hash, user.id);
+  clearCode(email, 'reset');
   res.json({ ok: true, message: '비밀번호가 변경됐어요. 새 비밀번호로 로그인하세요.' });
 });
 

@@ -27,12 +27,22 @@
       <div id="pwPanel" class="hidden">
         <label>학교 이메일</label>
         <input id="pwEmail" placeholder="43gshs-1319@g.gne.go.kr" />
-        <label>실명 <span class="muted">(가입 시 입력한 실명)</span></label>
-        <input id="pwName" placeholder="홍길동" />
+        <!-- 실명 방식 (SMTP 미설정) -->
+        <div id="nameField">
+          <label>실명 <span class="muted">(가입 시 입력한 실명)</span></label>
+          <input id="pwName" placeholder="홍길동" />
+        </div>
+        <!-- 이메일 코드 방식 (SMTP 설정) -->
+        <div id="codeField" class="hidden">
+          <div class="row" style="margin-top:6px"><button type="button" id="pwSendCode" class="btn-sm btn-ghost">인증코드 받기</button>
+            <input id="pwCode" placeholder="코드 6자리" style="flex:1" maxlength="6" inputmode="numeric" />
+            <button type="button" id="pwVerify" class="btn-sm">확인</button></div>
+          <p class="muted" id="pwVstate" style="margin:4px 0 0"></p>
+        </div>
         <label>새 비밀번호 <span class="muted">(6자 이상)</span></label>
         <input id="pwNew" type="password" autocomplete="new-password" />
         <div style="margin-top:14px"><button id="pwBtn" style="width:100%">비밀번호 재설정</button></div>
-        <p class="muted" style="margin-top:10px">실명이 기억나지 않으면 <a href="/inquiries.html">문의사항</a> 또는 관리자에게 문의하세요.</p>
+        <p class="muted" style="margin-top:10px" id="pwHelp">실명이 기억나지 않으면 관리자에게 문의하세요.</p>
       </div>
 
       <p class="muted" style="margin-top:16px"><a href="/login.html">← 로그인으로</a></p>
@@ -43,6 +53,24 @@
     await renderNav();
     const msg = document.getElementById('msg');
     const tabs = document.getElementById('tabs');
+
+    // 이메일 인증 사용 여부 → 재설정 방식 분기
+    let mailOn = false, pwVerified = false;
+    try { mailOn = (await api.get('/api/auth/mail-status')).enabled; } catch {}
+    if (mailOn) {
+      document.getElementById('nameField').classList.add('hidden');
+      document.getElementById('codeField').classList.remove('hidden');
+      document.getElementById('pwHelp').textContent = '가입한 학교 이메일로 인증코드를 보내드려요.';
+    }
+    const pvs = () => document.getElementById('pwVstate');
+    document.getElementById('pwSendCode')?.addEventListener('click', async () => {
+      try { const d = await api.post('/api/auth/send-code', { email: document.getElementById('pwEmail').value.trim(), purpose: 'reset' }); pvs().textContent = '📩 ' + d.message; pvs().style.color = 'var(--green)'; }
+      catch (e) { pvs().textContent = e.message; pvs().style.color = 'var(--danger)'; }
+    });
+    document.getElementById('pwVerify')?.addEventListener('click', async () => {
+      try { await api.post('/api/auth/verify-code', { email: document.getElementById('pwEmail').value.trim(), code: document.getElementById('pwCode').value.trim(), purpose: 'reset' }); pwVerified = true; pvs().textContent = '✅ 인증 완료'; pvs().style.color = 'var(--green)'; }
+      catch (e) { pvs().textContent = e.message; pvs().style.color = 'var(--danger)'; }
+    });
 
     tabs.querySelectorAll('.pill').forEach((p) => p.addEventListener('click', () => {
       tabs.querySelectorAll('.pill').forEach((x) => x.classList.remove('active'));
@@ -59,12 +87,11 @@
     });
 
     document.getElementById('pwBtn').addEventListener('click', async () => {
+      if (mailOn && !pwVerified) { showMsg(msg, '이메일 인증을 먼저 완료해주세요.'); return; }
       try {
-        const d = await api.post('/api/auth/reset-password', {
-          email: document.getElementById('pwEmail').value.trim(),
-          realname: document.getElementById('pwName').value.trim(),
-          newPassword: document.getElementById('pwNew').value,
-        });
+        const body = { email: document.getElementById('pwEmail').value.trim(), newPassword: document.getElementById('pwNew').value };
+        if (!mailOn) body.realname = document.getElementById('pwName').value.trim();
+        const d = await api.post('/api/auth/reset-password', body);
         showMsg(msg, d.message, true);
         setTimeout(() => location.href = '/login.html', 1500);
       } catch (e) { showMsg(msg, e.message); }

@@ -191,6 +191,17 @@ CREATE TABLE IF NOT EXISTS reactions (
   PRIMARY KEY (post_id, user_id)
 );
 
+-- 이메일 인증코드 (register / reset)
+CREATE TABLE IF NOT EXISTS email_codes (
+  email       TEXT NOT NULL,
+  purpose     TEXT NOT NULL,               -- register | reset
+  code        TEXT NOT NULL,
+  verified    INTEGER NOT NULL DEFAULT 0,
+  expires_at  TEXT NOT NULL,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (email, purpose)
+);
+
 -- 문의사항 (1:1 문의 → 관리자 답변)
 CREATE TABLE IF NOT EXISTS inquiries (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
