@@ -74,9 +74,13 @@ export async function renderNav(opts = {}) {
   const sb = document.createElement('nav');
   sb.className = 'sidebar';
   sb.id = 'sidebar';
+  const ni = me ? nextLevelInfo(me.point) : null;
   const userBox = me
-    ? `<div class="sb-user"><b>${esc(me.username)}</b> 님 ${me.role === 'admin' ? '<span class="badge admin">관리자</span>' : ''}
-        ${me.demerit > 0 ? `<span class="badge demerit">벌점 ${me.demerit}</span>` : ''}
+    ? `<div class="sb-user">
+        <div class="row" style="gap:6px"><b>${esc(me.username)}</b> ${levelBadge(me.point, me.role)}
+          ${me.demerit > 0 ? `<span class="badge demerit">벌점 ${me.demerit}</span>` : ''}</div>
+        ${me.role !== 'admin' ? `<div class="lv-bar"><div class="lv-bar-in" style="width:${ni.next ? Math.min(100, Math.round((me.point-ni.cur.min)/(ni.next.min-ni.cur.min)*100)) : 100}%"></div></div>
+          <div class="muted" style="font-size:11px;margin-top:3px">활동점수 ${me.point}점 ${ni.next ? `· 다음 등급(${ni.next.emoji}${ni.next.name})까지 ${ni.remain}점` : '· 최고 등급!'}</div>` : ''}
         <div style="margin-top:8px"><a href="#" id="logoutLink" class="muted">로그아웃</a></div></div>`
     : `<a href="/login.html" class="sb-login"><b>로그인 / 회원가입</b><span class="muted">재학생 인증 후 이용할 수 있어요</span></a>`;
   const authed = !!me;
@@ -98,6 +102,32 @@ export async function renderNav(opts = {}) {
     <div class="sb-foot">🌲 1984년 개교 · 국내 최초 과학고, 경남과학고<br>GSHS 학생 커뮤니티</div>`;
   document.body.prepend(overlay);
   document.body.prepend(sb);
+
+  // 데스크탑 왼쪽 카페 메뉴 (넓은 화면 전용)
+  if (me) {
+    const aside = document.createElement('aside');
+    aside.className = 'cafe-menu';
+    aside.innerHTML = `
+      <div class="cm-box">
+        <div class="cm-title">📋 게시판</div>
+        <a class="cm-link" href="/">🏠 전체 글</a>
+        <a class="cm-link" href="/board.html?board=free&sort=popular">🔥 인기글</a>
+        <a class="cm-link" href="/board.html?board=notice">📢 공지사항</a>
+        <a class="cm-link" href="/board.html?board=free">💬 자유게시판</a>
+        <a class="cm-link" href="/board.html?board=resource">📚 자료공유</a>
+        <div class="cm-title" style="margin-top:12px">🏫 소통</div>
+        <a class="cm-link" href="/chat.html">⚡ 반 채팅방</a>
+        <a class="cm-link" href="/calendar.html">📅 캘린더</a>
+        ${me.role === 'admin' ? '<a class="cm-link" href="/admin.html">🛠️ 관리자</a>' : ''}
+      </div>
+      <div class="cm-box">
+        <div class="cm-title">${esc(me.username)} 님</div>
+        <div style="margin:4px 0">${levelBadge(me.point, me.role)}</div>
+        ${me.role !== 'admin' ? `<div class="muted" style="font-size:11px">활동점수 ${me.point}점</div>` : ''}
+        <a class="cm-link" href="/info.html?p=levels" style="margin-top:6px">🌱 등급 안내</a>
+      </div>`;
+    document.body.appendChild(aside);
+  }
 
   const open = () => { sb.classList.add('open'); overlay.classList.add('open'); };
   const close = () => { sb.classList.remove('open'); overlay.classList.remove('open'); };
@@ -121,6 +151,31 @@ export function showMsg(el, text, ok = false) {
 let _meta = null;
 export async function getMeta() { if (!_meta) _meta = await api.get('/api/meta'); return _meta; }
 
+// ===== 네이버 카페식 회원 등급(등업) =====
+const LEVELS = [
+  { min: 200, emoji: '👑', name: '정회원' },
+  { min: 100, emoji: '🍎', name: '열매' },
+  { min: 50,  emoji: '🌸', name: '꽃' },
+  { min: 20,  emoji: '🍃', name: '잎새' },
+  { min: 5,   emoji: '🌿', name: '새싹' },
+  { min: 0,   emoji: '🌱', name: '씨앗' },
+];
+export function levelOf(point) { return LEVELS.find((l) => (point || 0) >= l.min) || LEVELS[LEVELS.length - 1]; }
+// 등급 뱃지 HTML. role='admin' 이면 운영자 뱃지
+export function levelBadge(point, role) {
+  if (role === 'admin') return `<span class="lv lv-admin" title="운영자">👑 운영자</span>`;
+  const l = levelOf(point);
+  return `<span class="lv" title="활동점수 ${point||0}점">${l.emoji} ${l.name}</span>`;
+}
+// 다음 등급까지 안내
+export function nextLevelInfo(point) {
+  point = point || 0;
+  const asc = [...LEVELS].reverse();
+  const cur = levelOf(point);
+  const next = asc.find((l) => l.min > point);
+  return { cur, next, remain: next ? next.min - point : 0 };
+}
+
 // 디시인사이드 스타일 게시판 표 렌더링
 // subjName(code) 를 넘기면 자료게시판 과목명을 말머리로 표시
 export function renderDcTable(posts, tagName, subjName) {
@@ -134,10 +189,12 @@ export function renderDcTable(posts, tagName, subjName) {
       ? `<span class="notice-badge">공지</span>`
       : p.id;
     const cmt = p.comment_count > 0 ? `<span class="cmt">[${p.comment_count}]</span>` : '';
+    const lv = levelOf(p.author_point);
+    const lvIcon = p.author_role === 'admin' ? '👑' : lv.emoji;
     return `<tr class="${p.board==='notice'?'is-notice':''}" onclick="location.href='/post.html?id=${p.id}'">
       <td class="c-no">${noCell}</td>
       <td class="c-subj">${head}<span class="subj-title">${esc(p.title)}</span>${cmt}</td>
-      <td class="c-user">${esc(p.author)}</td>
+      <td class="c-user"><span class="lv-dot" title="${p.author_role==='admin'?'운영자':lv.name}">${lvIcon}</span>${esc(p.author)}</td>
       <td class="c-date">${fmt(p.created_at)}</td>
       <td class="c-num c-views">${p.views}</td>
       <td class="c-num c-reco"><span class="reco">${p.like_count}</span></td>

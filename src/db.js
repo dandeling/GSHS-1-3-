@@ -113,6 +113,17 @@ const postCols = db.prepare("PRAGMA table_info(posts)").all().map((c) => c.name)
 if (!postCols.includes('tag')) {
   db.exec("ALTER TABLE posts ADD COLUMN tag TEXT");
 }
+// ---- 마이그레이션: users.point (네이버 카페식 활동점수/등급) ----
+const userCols = db.prepare("PRAGMA table_info(users)").all().map((c) => c.name);
+if (!userCols.includes('point')) {
+  db.exec("ALTER TABLE users ADD COLUMN point INTEGER NOT NULL DEFAULT 0");
+}
+
+// 활동점수 증감 (0 미만 방지). 관리자는 등급 미적용이라 점수만 쌓아도 무방.
+export function addPoint(userId, n) {
+  if (!userId) return;
+  db.prepare('UPDATE users SET point = MAX(0, point + ?) WHERE id = ?').run(n, userId);
+}
 
 // ---- 기본 관리자 계정 시딩 ----
 function seedAdmin() {

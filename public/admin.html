@@ -35,7 +35,7 @@
     </div>
   </main>
   <script type="module">
-    import { renderNav, api, esc, showMsg } from '/js/common.js';
+    import { renderNav, api, esc, showMsg, levelBadge } from '/js/common.js';
     await renderNav({ requireLogin: true, requireAdmin: true });
     const msg = document.getElementById('msg');
     let filter = '';
@@ -63,7 +63,7 @@
           actions += `<button class="btn-sm btn-ghost" data-act="reset-demerit" data-id="${u.id}">벌점초기화</button>`;
         } else actions = '<span class="muted">—</span>';
         return `<tr>
-          <td>${esc(u.username)} ${isAdmin ? '<span class="badge admin">관리자</span>' : ''}</td>
+          <td>${esc(u.username)}<br>${levelBadge(u.point, u.role)}</td>
           <td>${esc(u.realname)}</td><td class="nowrap">${u.grade}기 ${esc(u.student_id)}</td>
           <td class="muted" style="font-size:12px">${esc(u.email)}</td>
           <td class="center">${u.demerit >= 3 ? `<b style="color:var(--danger)">${u.demerit}</b>` : u.demerit}</td>

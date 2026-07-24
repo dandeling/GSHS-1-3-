@@ -28,7 +28,7 @@
     </div>
   </main>
   <script type="module">
-    import { renderNav, api, esc, fmt, qs, showMsg, getMeta } from '/js/common.js';
+    import { renderNav, api, esc, fmt, qs, showMsg, getMeta, levelBadge } from '/js/common.js';
     const me = await renderNav({ requireLogin: true });
     const meta = await getMeta();
     const id = qs('id');
@@ -53,7 +53,7 @@
         </div>
         <div class="p-top" style="margin-top:12px">${tagLabel(p)}</div>
         <h1 style="margin:6px 0">${esc(p.title)}</h1>
-        <p class="muted">${esc(p.author)} · ${fmt(p.created_at)} ${p.updated_at ? '(수정됨)' : ''} · 조회 ${p.views}</p>
+        <p class="muted">${levelBadge(p.author_point, p.author_role)} <b style="color:var(--text)">${esc(p.author)}</b> · ${fmt(p.created_at)} ${p.updated_at ? '(수정됨)' : ''} · 조회 ${p.views}</p>
         <hr />
         <div style="white-space:pre-wrap;font-size:15.5px;min-height:40px">${esc(p.content)}</div>
         <div style="text-align:center;margin-top:22px">
@@ -79,7 +79,7 @@
       if (!data.comments.length) { box.innerHTML = '<p class="muted">첫 댓글을 남겨보세요.</p>'; return; }
       box.innerHTML = data.comments.map((c) => `
         <div class="comment">
-          <span class="who">${esc(c.author)}</span><span class="time">${fmt(c.created_at)}</span>
+          ${levelBadge(c.author_point, c.author_role)} <span class="who">${esc(c.author)}</span><span class="time">${fmt(c.created_at)}</span>
           ${(c.author_id === me.id || me.role === 'admin') ? `<a href="#" class="muted" style="float:right;font-size:12px" data-del="${c.id}">삭제</a>` : ''}
           <div style="white-space:pre-wrap">${esc(c.content)}</div>
         </div>`).join('');

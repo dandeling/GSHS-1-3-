@@ -1,5 +1,5 @@
 import express from 'express';
-import db, { logAudit } from '../db.js';
+import db, { logAudit, addPoint } from '../db.js';
 import { requireAuth } from '../middleware.js';
 import { addDemerit } from '../middleware.js';
 import { countBadwords } from '../badwords.js';
@@ -55,7 +55,7 @@ router.get('/', requireAuth, (req, res) => {
   const total = db.prepare(`SELECT COUNT(*) c FROM posts p WHERE ${whereSql}`).get(...params).c;
   const rows = db.prepare(`
     SELECT p.id, p.board, p.tag, p.subject, p.category, p.title, p.views, p.created_at, p.updated_at,
-           u.username AS author,
+           u.username AS author, u.point AS author_point, u.role AS author_role,
            (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id AND c.deleted_at IS NULL) AS comment_count,
            (SELECT COUNT(*) FROM likes l WHERE l.post_id = p.id) AS like_count
     FROM posts p JOIN users u ON u.id = p.author_id
@@ -70,7 +70,7 @@ router.get('/', requireAuth, (req, res) => {
 // 단건 조회 (조회수 +1) + 댓글
 router.get('/:id', requireAuth, (req, res) => {
   const post = db.prepare(`
-    SELECT p.*, u.username AS author
+    SELECT p.*, u.username AS author, u.point AS author_point, u.role AS author_role
     FROM posts p JOIN users u ON u.id = p.author_id
     WHERE p.id = ? AND p.deleted_at IS NULL
   `).get(req.params.id);
@@ -80,7 +80,7 @@ router.get('/:id', requireAuth, (req, res) => {
   post.views += 1;
 
   const comments = db.prepare(`
-    SELECT c.id, c.content, c.created_at, c.author_id, u.username AS author
+    SELECT c.id, c.content, c.created_at, c.author_id, u.username AS author, u.point AS author_point, u.role AS author_role
     FROM comments c JOIN users u ON u.id = c.author_id
     WHERE c.post_id = ? AND c.deleted_at IS NULL
     ORDER BY c.id ASC
@@ -96,11 +96,14 @@ router.get('/:id', requireAuth, (req, res) => {
 router.post('/:id/like', requireAuth, (req, res) => {
   const post = db.prepare('SELECT id FROM posts WHERE id=? AND deleted_at IS NULL').get(req.params.id);
   if (!post) return res.status(404).json({ error: '글을 찾을 수 없습니다.' });
+  const full = db.prepare('SELECT author_id FROM posts WHERE id=?').get(post.id);
   const liked = db.prepare('SELECT 1 FROM likes WHERE post_id=? AND user_id=?').get(post.id, req.user.id);
   if (liked) {
     db.prepare('DELETE FROM likes WHERE post_id=? AND user_id=?').run(post.id, req.user.id);
+    if (full.author_id !== req.user.id) addPoint(full.author_id, -1);
   } else {
     db.prepare('INSERT INTO likes (post_id, user_id) VALUES (?, ?)').run(post.id, req.user.id);
+    if (full.author_id !== req.user.id) addPoint(full.author_id, 1); // 받은 추천 +1
   }
   const count = db.prepare('SELECT COUNT(*) c FROM likes WHERE post_id=?').get(post.id).c;
   res.json({ ok: true, liked: !liked, like_count: count });
@@ -132,6 +135,7 @@ router.post('/', requireAuth, (req, res) => {
   `).run(board, subj, cat, tg, title.trim(), content.trim(), req.user.id);
 
   logAudit('post', info.lastInsertRowid, 'create', JSON.stringify({ title, content }), req.user.id);
+  addPoint(req.user.id, 5); // 글 작성 +5
   res.json({ ok: true, id: info.lastInsertRowid });
 });
 
@@ -198,6 +202,7 @@ router.post('/:id/comments', requireAuth, (req, res) => {
   const info = db.prepare('INSERT INTO comments (post_id, author_id, content) VALUES (?, ?, ?)')
     .run(post.id, req.user.id, content.trim());
   logAudit('comment', info.lastInsertRowid, 'create', content, req.user.id);
+  addPoint(req.user.id, 2); // 댓글 작성 +2
   res.json({ ok: true, id: info.lastInsertRowid, penalty });
 });
 

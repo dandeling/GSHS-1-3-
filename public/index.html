@@ -52,7 +52,7 @@
   <a class="fab hidden" id="fab" href="/write.html?board=free">✏️ 글쓰기</a>
 
   <script type="module">
-    import { renderNav, api, esc, fmt, qs, getMeta, renderDcTable } from '/js/common.js';
+    import { renderNav, api, esc, fmt, qs, getMeta, renderDcTable, levelBadge } from '/js/common.js';
     const me = await renderNav();
 
     // 로그인 안내 / 글쓰기 버튼
@@ -76,7 +76,7 @@
         ? h.popular.map((p, i) => `<div class="rank-item" onclick="location.href='/post.html?id=${p.id}'">
             <div class="rank-no">${i+1}</div>
             <div class="grow"><div class="p-title">${esc(p.title)}</div>
-            <div class="p-meta"><span>${esc(p.author)}</span><span>👁 ${p.views}</span><b>❤ ${p.like_count}</b><span>💬 ${p.comment_count}</span></div></div>
+            <div class="p-meta">${levelBadge(p.author_point, p.author_role)} <span>${esc(p.author)}</span><span>👁 ${p.views}</span><b>❤ ${p.like_count}</b><span>💬 ${p.comment_count}</span></div></div>
           </div>`).join('')
         : `<div class="empty">아직 게시글이 없어요.</div>`;
 
@@ -84,6 +84,7 @@
       document.getElementById('fameCard').innerHTML = h.hallOfFame.length
         ? `<div class="fame">${h.hallOfFame.map((f, i) => `<div class="fame-card">
             <div class="fame-medal">${medals[i]}</div><div class="fame-name">${esc(f.author)}</div>
+            <div style="margin:2px 0">${levelBadge(f.author_point, f.author_role)}</div>
             <div class="fame-stat">글 ${f.post_count} · ❤ ${f.like_count}</div></div>`).join('')}</div>`
         : `<div class="empty">아직 명예의 전당 기록이 없어요.</div>`;
     } catch (e) {

@@ -85,6 +85,7 @@ export function publicUser(u) {
     status: u.status,
     demerit: u.demerit,
     grade: u.grade,
+    point: u.point || 0,
   };
 }
 

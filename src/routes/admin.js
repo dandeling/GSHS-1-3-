@@ -17,7 +17,7 @@ router.get('/users', requireAdmin, (req, res) => {
     id: u.id, email: u.email, username: u.username, realname: u.realname,
     grade: u.grade, student_id: u.student_id, role: u.role,
     status: u.status, demerit: u.demerit, suspended_until: u.suspended_until,
-    created_at: u.created_at,
+    point: u.point || 0, created_at: u.created_at,
   }));
   res.json({ users });
 });

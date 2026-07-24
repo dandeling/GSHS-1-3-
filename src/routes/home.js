@@ -11,7 +11,7 @@ router.get('/', requireAuth, (req, res) => {
 
   // 인기 글: 최근 14일 내, 좋아요*5 + 조회 + 댓글*3 점수 상위 5
   const popular = db.prepare(`
-    SELECT p.id, p.board, p.tag, p.title, u.username AS author, p.views,
+    SELECT p.id, p.board, p.tag, p.title, u.username AS author, u.point AS author_point, u.role AS author_role, p.views,
            (SELECT COUNT(*) FROM likes l WHERE l.post_id=p.id) AS like_count,
            (SELECT COUNT(*) FROM comments c WHERE c.post_id=p.id AND c.deleted_at IS NULL) AS comment_count
     FROM posts p JOIN users u ON u.id=p.author_id
@@ -23,7 +23,7 @@ router.get('/', requireAuth, (req, res) => {
 
   // 명예의 전당: 이번 달 작성 글의 (좋아요+댓글) 합이 높은 작성자 상위 3
   const hallOfFame = db.prepare(`
-    SELECT u.username AS author,
+    SELECT u.username AS author, u.point AS author_point, u.role AS author_role,
            COUNT(DISTINCT p.id) AS post_count,
            (SELECT COUNT(*) FROM likes l JOIN posts p2 ON p2.id=l.post_id
              WHERE p2.author_id=u.id AND strftime('%Y-%m', p2.created_at)=strftime('%Y-%m','now')) AS like_count

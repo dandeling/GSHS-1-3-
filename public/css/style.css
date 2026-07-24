@@ -256,5 +256,23 @@ th { color: var(--muted); font-size: 12px; font-weight: 700; }
 .prose p { margin: 8px 0; color: var(--text); }
 .prose ul { padding-left: 20px; } .prose li { margin: 5px 0; }
 
+/* ===== 회원 등급 (네이버 카페식) ===== */
+.lv { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 999px;
+  background: color-mix(in srgb, var(--green) 14%, var(--card)); color: var(--green); white-space: nowrap; }
+.lv-admin { background: color-mix(in srgb, var(--warn) 18%, var(--card)); color: var(--warn); }
+.lv-dot { margin-right: 3px; font-size: 12px; }
+.lv-bar { height: 6px; border-radius: 999px; background: var(--line); overflow: hidden; margin-top: 8px; }
+.lv-bar-in { height: 100%; background: var(--green); border-radius: 999px; }
+
+/* ===== 데스크탑 왼쪽 카페 메뉴 ===== */
+.cafe-menu { display: none; }
+@media (min-width: 1080px) {
+  .cafe-menu { display: block; position: fixed; top: 78px; left: calc(50% - 530px); width: 200px; z-index: 20; }
+  .cm-box { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-bottom: 12px; box-shadow: var(--shadow); }
+  .cm-title { font-weight: 800; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .cm-link { display: block; padding: 8px 8px; border-radius: 9px; font-size: 14px; font-weight: 600; color: var(--text); }
+  .cm-link:hover { background: var(--bg); color: var(--green); }
+}
+
 .hidden { display: none !important; }
 .center-narrow { max-width: 440px; }
