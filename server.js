@@ -11,6 +11,7 @@ import chatRouter from './src/routes/chat.js';
 import calendarRouter from './src/routes/calendar.js';
 import adminRouter from './src/routes/admin.js';
 import homeRouter from './src/routes/home.js';
+import usersRouter from './src/routes/users.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -29,6 +30,7 @@ app.get('/api/meta', (req, res) => {
 app.use('/api/auth', authRouter);
 app.use('/api/home', homeRouter);
 app.use('/api/posts', postsRouter);
+app.use('/api/users', usersRouter);
 app.use('/api/chat', chatRouter);
 app.use('/api/calendar', calendarRouter);
 app.use('/api/admin', adminRouter);

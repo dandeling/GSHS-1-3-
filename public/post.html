@@ -53,12 +53,15 @@
         </div>
         <div class="p-top" style="margin-top:12px">${tagLabel(p)}</div>
         <h1 style="margin:6px 0">${esc(p.title)}</h1>
-        <p class="muted">${levelBadge(p.author_point, p.author_role)} <b style="color:var(--text)">${esc(p.author)}</b> · ${fmt(p.created_at)} ${p.updated_at ? '(수정됨)' : ''} · 조회 ${p.views}</p>
+        <p class="muted">${levelBadge(p.author_point, p.author_role)} <b class="clickable-user" style="color:var(--text)" onclick="location.href='/profile.html?u=${encodeURIComponent(p.author).replace(/'/g,'%27')}'">${esc(p.author)}</b> · ${fmt(p.created_at)} ${p.updated_at ? '(수정됨)' : ''} · 조회 ${p.views}</p>
         <hr />
         <div style="white-space:pre-wrap;font-size:15.5px;min-height:40px">${esc(p.content)}</div>
+        <div id="pollBox"></div>
         <div style="text-align:center;margin-top:22px">
           <button class="like-btn ${p.liked?'on':''}" id="likeBtn">❤ 좋아요 <span id="likeCount">${p.like_count}</span></button>
         </div>`;
+
+      renderPoll();
 
       document.getElementById('likeBtn').addEventListener('click', async () => {
         const r = await api.post(`/api/posts/${id}/like`);
@@ -73,19 +76,60 @@
       renderComments();
     }
 
+    function renderPoll() {
+      const box = document.getElementById('pollBox');
+      if (!box || !data.poll) return;
+      const pl = data.poll;
+      box.innerHTML = `<div class="poll"><div class="poll-q">🗳️ ${esc(pl.question)}</div>
+        ${pl.options.map((o) => {
+          const pct = pl.total ? Math.round(o.votes / pl.total * 100) : 0;
+          const voted = pl.myOption === o.id;
+          return `<div class="poll-opt ${voted?'voted':''}" data-opt="${o.id}">
+            <div class="bar" style="width:${pl.myOption?pct:0}%"></div>
+            <div class="lbl"><span>${voted?'✓ ':''}${esc(o.text)}</span>${pl.myOption?`<span class="pct">${pct}% (${o.votes})</span>`:''}</div>
+          </div>`;
+        }).join('')}
+        <div class="poll-total">${pl.myOption?`총 ${pl.total}표`:'선택지를 눌러 투표하세요'}</div></div>`;
+      box.querySelectorAll('[data-opt]').forEach((el) => el.addEventListener('click', async () => {
+        const r = await api.post(`/api/posts/${id}/poll/vote`, { option_id: +el.dataset.opt });
+        data.poll = r.poll; renderPoll();
+      }));
+    }
+
     function renderComments() {
-      document.getElementById('ccount').textContent = data.comments.length;
+      const all = data.comments;
+      document.getElementById('ccount').textContent = all.length;
       const box = document.getElementById('comments');
-      if (!data.comments.length) { box.innerHTML = '<p class="muted">첫 댓글을 남겨보세요.</p>'; return; }
-      box.innerHTML = data.comments.map((c) => `
-        <div class="comment">
-          ${levelBadge(c.author_point, c.author_role)} <span class="who">${esc(c.author)}</span><span class="time">${fmt(c.created_at)}</span>
+      if (!all.length) { box.innerHTML = '<p class="muted">첫 댓글을 남겨보세요.</p>'; return; }
+      const parents = all.filter((c) => !c.parent_id);
+      const childrenOf = (pid) => all.filter((c) => c.parent_id === pid);
+      const one = (c, isReply) => `
+        <div class="comment ${isReply?'reply':''}">
+          ${levelBadge(c.author_point, c.author_role)} <span class="who clickable-user" data-user="${esc(c.author)}">${esc(c.author)}</span><span class="time">${fmt(c.created_at)}</span>
+          ${!isReply ? `<span class="re-btn" data-reply="${c.id}">답글</span>` : ''}
           ${(c.author_id === me.id || me.role === 'admin') ? `<a href="#" class="muted" style="float:right;font-size:12px" data-del="${c.id}">삭제</a>` : ''}
           <div style="white-space:pre-wrap">${esc(c.content)}</div>
-        </div>`).join('');
+          <div class="reply-form" data-form="${c.id}"></div>
+        </div>`;
+      box.innerHTML = parents.map((p) => one(p, false) + childrenOf(p.id).map((r) => one(r, true)).join('')).join('');
+
       box.querySelectorAll('[data-del]').forEach((a) => a.addEventListener('click', async (e) => {
         e.preventDefault(); if (!confirm('댓글을 삭제할까요?')) return;
         await api.del('/api/posts/comments/' + a.dataset.del); await load();
+      }));
+      box.querySelectorAll('[data-user]').forEach((a) => a.addEventListener('click', () => location.href = '/profile.html?u=' + encodeURIComponent(a.dataset.user)));
+      box.querySelectorAll('[data-reply]').forEach((a) => a.addEventListener('click', () => {
+        const cid = a.dataset.reply;
+        const form = box.querySelector(`[data-form="${cid}"]`);
+        if (form.dataset.open) { form.innerHTML = ''; form.dataset.open = ''; return; }
+        form.dataset.open = '1';
+        form.innerHTML = `<div class="row" style="margin-top:8px"><input class="grow re-input" placeholder="답글 입력"><button class="btn-sm re-send">등록</button></div>`;
+        form.querySelector('.re-send').addEventListener('click', async () => {
+          const val = form.querySelector('.re-input').value.trim();
+          if (!val) return;
+          try { await api.post(`/api/posts/${id}/comments`, { content: val, parent_id: +cid }); await load(); }
+          catch (err) { showMsg(document.getElementById('cmsg'), err.message); }
+        });
       }));
     }
 

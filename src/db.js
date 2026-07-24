@@ -95,18 +95,73 @@ CREATE TABLE IF NOT EXISTS likes (
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
--- 오늘의 급식 (관리자 관리)
+-- 오늘의 급식 (관리자 관리 + NEIS 자동연동 캐시)
 CREATE TABLE IF NOT EXISTS meals (
   meal_date   TEXT PRIMARY KEY,            -- YYYY-MM-DD
   content     TEXT NOT NULL,
+  source      TEXT DEFAULT 'manual',       -- manual | neis
   updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- D-day (관리자 관리)
+CREATE TABLE IF NOT EXISTS ddays (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  title       TEXT NOT NULL,
+  target_date TEXT NOT NULL,               -- YYYY-MM-DD
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- 출석체크
+CREATE TABLE IF NOT EXISTS attendance (
+  user_id     INTEGER NOT NULL,
+  day         TEXT NOT NULL,               -- YYYY-MM-DD
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, day),
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+-- 채팅방
+CREATE TABLE IF NOT EXISTS chat_rooms (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  name        TEXT NOT NULL,
+  created_by  INTEGER,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- 투표/설문 (게시글에 부착)
+CREATE TABLE IF NOT EXISTS polls (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  post_id     INTEGER NOT NULL UNIQUE,
+  question    TEXT NOT NULL,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (post_id) REFERENCES posts(id)
+);
+CREATE TABLE IF NOT EXISTS poll_options (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  poll_id     INTEGER NOT NULL,
+  idx         INTEGER NOT NULL,
+  text        TEXT NOT NULL,
+  FOREIGN KEY (poll_id) REFERENCES polls(id)
+);
+CREATE TABLE IF NOT EXISTS poll_votes (
+  poll_id     INTEGER NOT NULL,
+  user_id     INTEGER NOT NULL,
+  option_id   INTEGER NOT NULL,
+  PRIMARY KEY (poll_id, user_id),
+  FOREIGN KEY (poll_id) REFERENCES polls(id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_posts_board ON posts(board, subject, category);
 CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(post_id);
 CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_logs(entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_likes_post ON likes(post_id);
+CREATE INDEX IF NOT EXISTS idx_chats_room ON chats(id);
 `);
+
+// 기본 채팅방 시딩
+if (!db.prepare('SELECT id FROM chat_rooms LIMIT 1').get()) {
+  db.prepare("INSERT INTO chat_rooms (name, created_by) VALUES ('전체 채팅방', NULL)").run();
+}
 
 // ---- 마이그레이션: posts.tag 컬럼 (기존 DB 대비) ----
 const postCols = db.prepare("PRAGMA table_info(posts)").all().map((c) => c.name);
@@ -117,6 +172,21 @@ if (!postCols.includes('tag')) {
 const userCols = db.prepare("PRAGMA table_info(users)").all().map((c) => c.name);
 if (!userCols.includes('point')) {
   db.exec("ALTER TABLE users ADD COLUMN point INTEGER NOT NULL DEFAULT 0");
+}
+// ---- 마이그레이션: comments.parent_id (대댓글) ----
+const commentCols = db.prepare("PRAGMA table_info(comments)").all().map((c) => c.name);
+if (!commentCols.includes('parent_id')) {
+  db.exec("ALTER TABLE comments ADD COLUMN parent_id INTEGER");
+}
+// ---- 마이그레이션: chats.room_id (채팅방) ----
+const chatCols = db.prepare("PRAGMA table_info(chats)").all().map((c) => c.name);
+if (!chatCols.includes('room_id')) {
+  db.exec("ALTER TABLE chats ADD COLUMN room_id INTEGER NOT NULL DEFAULT 1");
+}
+// ---- 마이그레이션: meals.source ----
+const mealCols = db.prepare("PRAGMA table_info(meals)").all().map((c) => c.name);
+if (!mealCols.includes('source')) {
+  db.exec("ALTER TABLE meals ADD COLUMN source TEXT DEFAULT 'manual'");
 }
 
 // 활동점수 증감 (0 미만 방지). 관리자는 등급 미적용이라 점수만 쌓아도 무방.

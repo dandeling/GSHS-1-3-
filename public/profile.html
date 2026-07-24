@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>프로필 · 큰들 커뮤니티</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <main>
+    <div class="card" id="head">불러오는 중…</div>
+    <div class="section-title">📝 작성한 글<span class="line"></span></div>
+    <div class="card"><div id="posts"></div></div>
+  </main>
+  <script type="module">
+    import { renderNav, api, esc, fmt, qs, getMeta, renderDcTable, levelBadge, levelOf, nextLevelInfo } from '/js/common.js';
+    const me = await renderNav({ requireLogin: true });
+    const meta = await getMeta();
+    const uname = qs('u') || me.username;
+
+    try {
+      const d = await api.get('/api/users/' + encodeURIComponent(uname) + '/profile');
+      const u = d.user, s = d.stats;
+      const ni = nextLevelInfo(u.point);
+      const joined = new Date(u.created_at.replace(' ','T')+'Z');
+      document.getElementById('head').innerHTML = `
+        <div class="profile-head">
+          <div class="profile-avatar">${esc(u.username[0]||'?')}</div>
+          <div class="grow">
+            <div class="row" style="gap:8px"><h1 style="margin:0">${esc(u.username)}</h1>${levelBadge(u.point, u.role)}</div>
+            <div class="muted">가입 ${joined.getFullYear()}.${joined.getMonth()+1}.${joined.getDate()}
+              ${u.role==='admin'?'· 운영자':`· 활동점수 ${u.point}점 ${ni.next?`(다음 ${ni.next.emoji}${ni.next.name}까지 ${ni.remain}점)`:''}`}</div>
+          </div>
+        </div>
+        <div class="stat-grid">
+          <div class="stat-box"><div class="n">${s.postCount}</div><div class="l">작성글</div></div>
+          <div class="stat-box"><div class="n">${s.commentCount}</div><div class="l">댓글</div></div>
+          <div class="stat-box"><div class="n">${s.likeReceived}</div><div class="l">받은 추천</div></div>
+          <div class="stat-box"><div class="n">${s.attendance}</div><div class="l">출석일</div></div>
+        </div>`;
+
+      const tagName = (c) => { const t = meta.tags.find((x)=>x.code===c); return t?`${t.emoji} ${t.name}`:''; };
+      const subName = (c) => { const x = meta.subjects.find((y)=>y.code===c); return x?x.name:''; };
+      document.getElementById('posts').innerHTML = d.posts.length ? renderDcTable(d.posts.map((p)=>({...p, author: u.username, author_point: u.point, author_role: u.role})), tagName, subName) : '<div class="empty">작성한 글이 없어요.</div>';
+    } catch (err) {
+      document.getElementById('head').innerHTML = `<div class="empty">${esc(err.message)}</div>`;
+    }
+  </script>
+</body>
+</html>

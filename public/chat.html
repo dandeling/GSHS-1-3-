@@ -3,29 +3,41 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>반 채팅방 · 큰들 커뮤니티</title>
+  <title>채팅방 · 큰들 커뮤니티</title>
   <link rel="stylesheet" href="/css/style.css" />
 </head>
 <body>
   <main>
     <div class="card">
-      <h1>⚡ 반 채팅방</h1>
-      <p class="muted">3초마다 새 메시지가 자동으로 로드돼요. (비속어 시 벌점 +1)</p>
+      <div class="row"><h1 class="grow" style="margin:0">⚡ 채팅방</h1>
+        <button id="newRoom" class="btn-sm btn-ghost">＋ 방 만들기</button></div>
+      <p class="muted">3초마다 새 메시지가 자동 로드돼요. (비속어 시 벌점 +1)</p>
+      <div class="room-tabs" id="roomTabs"></div>
       <div class="chat-box" id="box"></div>
       <div id="msg" class="hidden"></div>
       <form id="form" style="margin-top:12px">
-        <div class="row">
-          <input id="input" class="grow" placeholder="메시지 입력…" autocomplete="off" required />
-          <button type="submit">전송</button>
-        </div>
+        <div class="row"><input id="input" class="grow" placeholder="메시지 입력…" autocomplete="off" required /><button type="submit">전송</button></div>
       </form>
     </div>
   </main>
   <script type="module">
-    import { renderNav, api, esc, fmt, showMsg } from '/js/common.js';
+    import { renderNav, api, esc, fmt, showMsg, levelBadge } from '/js/common.js';
     const me = await renderNav({ requireLogin: true });
     const box = document.getElementById('box');
-    let lastId = 0, timer;
+    let rooms = [], curRoom = 1, lastId = 0, timer;
+
+    async function loadRooms() {
+      const d = await api.get('/api/chat/rooms');
+      rooms = d.rooms;
+      const tabs = document.getElementById('roomTabs');
+      tabs.innerHTML = rooms.map((r) => `<span class="room-tab ${r.id===curRoom?'active':''}" data-room="${r.id}">${esc(r.name)} <span class="muted">${r.msg_count}</span></span>`).join('');
+      tabs.querySelectorAll('[data-room]').forEach((el) => el.addEventListener('click', () => switchRoom(+el.dataset.room)));
+    }
+
+    function switchRoom(id) {
+      curRoom = id; lastId = 0; box.innerHTML = '';
+      loadRooms(); poll();
+    }
 
     function render(messages) {
       const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
@@ -33,7 +45,7 @@
         const div = document.createElement('div');
         div.className = 'chat-msg' + (m.author_id === me.id ? ' mine' : '');
         const canDel = m.author_id === me.id || me.role === 'admin';
-        div.innerHTML = `<span class="who">${esc(m.author)}</span><span class="time">${fmt(m.created_at)}</span>
+        div.innerHTML = `${levelBadge(m.author_point, m.author_role)} <span class="who">${esc(m.author)}</span><span class="time">${fmt(m.created_at)}</span>
           ${canDel ? `<a href="#" class="muted" style="font-size:11px;margin-left:6px" data-del="${m.id}">삭제</a>` : ''}
           <div><span class="chat-bubble">${esc(m.content)}</span></div>`;
         box.appendChild(div);
@@ -46,20 +58,29 @@
       if (atBottom) box.scrollTop = box.scrollHeight;
     }
 
-    async function poll() { try { const d = await api.get('/api/chat?since=' + lastId); if (d.messages.length) render(d.messages); } catch {} }
+    async function poll() {
+      try { const d = await api.get(`/api/chat?room=${curRoom}&since=${lastId}`); if (d.messages.length) render(d.messages); } catch {}
+    }
 
     document.getElementById('form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const input = document.getElementById('input');
       const text = input.value.trim(); if (!text) return;
       try {
-        const r = await api.post('/api/chat', { content: text });
+        const r = await api.post('/api/chat', { content: text, room: curRoom });
         input.value = '';
         if (r.penalty) showMsg(document.getElementById('msg'), `⚠️ 비속어 감지 — 벌점 ${r.penalty.demerit}점`);
         await poll();
       } catch (err) { showMsg(document.getElementById('msg'), err.message); }
     });
 
+    document.getElementById('newRoom').addEventListener('click', async () => {
+      const name = prompt('새 채팅방 이름:'); if (!name?.trim()) return;
+      try { const r = await api.post('/api/chat/rooms', { name: name.trim() }); await loadRooms(); switchRoom(r.id); }
+      catch (err) { showMsg(document.getElementById('msg'), err.message); }
+    });
+
+    await loadRooms();
     await poll();
     box.scrollTop = box.scrollHeight;
     timer = setInterval(poll, 3000);

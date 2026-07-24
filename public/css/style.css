@@ -261,6 +261,42 @@ th { color: var(--muted); font-size: 12px; font-weight: 700; }
 .prose p { margin: 8px 0; color: var(--text); }
 .prose ul { padding-left: 20px; } .prose li { margin: 5px 0; }
 
+/* ===== D-day 위젯 ===== */
+.dday-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.dday-chip { background: color-mix(in srgb, var(--ink) 8%, var(--card)); border: 1px solid var(--line-2); border-radius: 999px; padding: 6px 13px; font-size: 13px; font-weight: 700; }
+.dday-chip b { color: var(--green); font-weight: 800; }
+
+/* ===== 투표/설문 ===== */
+.poll { border: 1px solid var(--line-2); border-radius: 14px; padding: 16px; margin-top: 18px; background: var(--accent); }
+.poll-q { font-weight: 800; margin-bottom: 10px; }
+.poll-opt { position: relative; border: 1.5px solid var(--line-2); border-radius: 10px; padding: 11px 14px; margin-bottom: 8px; cursor: pointer; background: var(--card); overflow: hidden; }
+.poll-opt:hover { border-color: var(--ink); }
+.poll-opt.voted { border-color: var(--green); }
+.poll-opt .bar { position: absolute; inset: 0; background: color-mix(in srgb, var(--green) 14%, transparent); width: 0; transition: width .4s; z-index: 0; }
+.poll-opt .lbl { position: relative; z-index: 1; display: flex; justify-content: space-between; font-weight: 600; }
+.poll-opt .pct { color: var(--green); font-weight: 800; }
+.poll-total { color: var(--muted); font-size: 12px; margin-top: 6px; text-align: right; }
+.poll-add-opt { display: flex; gap: 8px; margin-bottom: 8px; }
+
+/* 대댓글 */
+.comment.reply { margin-left: 28px; border-top: 1px dashed var(--line-2); background: color-mix(in srgb, var(--accent) 50%, transparent); border-radius: 0 0 8px 8px; padding-left: 10px; }
+.comment .re-btn { font-size: 11px; color: var(--muted); margin-left: 8px; cursor: pointer; }
+
+/* 채팅방 탭 */
+.room-tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 8px; }
+.room-tab { flex: none; padding: 7px 14px; border-radius: 999px; border: 1.5px solid var(--line-2); background: var(--chip); font-weight: 700; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.room-tab.active { background: var(--ink); color: #fffdf8; border-color: var(--ink); }
+
+/* 프로필 */
+.profile-head { display: flex; gap: 16px; align-items: center; }
+.profile-avatar { width: 64px; height: 64px; border-radius: 50%; background: var(--ink); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 900; flex: none; }
+.stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 14px; }
+.stat-box { text-align: center; padding: 12px 6px; border: 1px solid var(--line); border-radius: 12px; }
+.stat-box .n { font-weight: 900; font-size: 18px; color: var(--green); }
+.stat-box .l { font-size: 11px; color: var(--muted); }
+.clickable-user { cursor: pointer; }
+.clickable-user:hover { text-decoration: underline; }
+
 /* ===== 회원 등급 (네이버 카페식) ===== */
 .lv { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 999px;
   background: color-mix(in srgb, var(--green) 14%, var(--card)); color: var(--green); white-space: nowrap; }

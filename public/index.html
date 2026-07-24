@@ -19,6 +19,12 @@
         <div class="logo-circle">큰들</div>
       </div>
       <div id="authCta"></div>
+      <!-- D-day + 출석 -->
+      <div id="widgets" class="hidden" style="margin-top:14px">
+        <div id="ddayRow" class="dday-row"></div>
+        <button id="attendBtn" class="btn-ghost btn-sm" style="margin-top:10px">📅 오늘 출석체크</button>
+        <span id="attendMsg" class="muted" style="margin-left:8px"></span>
+      </div>
     </div>
 
     <!-- 오늘의 급식 -->
@@ -68,9 +74,23 @@
       const h = await api.get('/api/home');
       const md = new Date(h.today);
       document.getElementById('mealDate').textContent = `${md.getMonth()+1}월 ${md.getDate()}일`;
+      const mealSrc = h.meal && h.meal.source === 'neis' ? ' <span class="lv" style="background:none">🍽 NEIS 자동</span>' : '';
       document.getElementById('mealCard').innerHTML = h.meal
-        ? `<div style="white-space:pre-wrap;font-size:15px">${esc(h.meal.content)}</div>`
+        ? `<div style="white-space:pre-wrap;font-size:15px">${esc(h.meal.content)}</div><div class="muted" style="margin-top:8px;font-size:11px">${mealSrc}</div>`
         : `<div class="empty">오늘은 등록된 급식 정보가 없어요. (주말·방학 등)</div>`;
+
+      // D-day + 출석 위젯
+      document.getElementById('widgets').classList.remove('hidden');
+      const dr = document.getElementById('ddayRow');
+      dr.innerHTML = h.ddays.length
+        ? h.ddays.map((d) => `<span class="dday-chip"><b>${esc(d.title)}</b> ${d.dleft===0?'D-DAY':'D-'+d.dleft}</span>`).join('')
+        : `<span class="muted" style="font-size:12px">등록된 D-day가 없어요.</span>`;
+      const ab = document.getElementById('attendBtn'), am = document.getElementById('attendMsg');
+      if (h.attendance.checkedToday) { ab.disabled = true; ab.textContent = '✅ 출석완료'; am.textContent = `누적 ${h.attendance.total}일`; }
+      else ab.addEventListener('click', async () => {
+        const r = await api.post('/api/home/attendance');
+        ab.disabled = true; ab.textContent = '✅ 출석완료'; am.textContent = `누적 ${r.total||''}일 · +2점`;
+      });
 
       document.getElementById('popularCard').innerHTML = h.popular.length
         ? h.popular.map((p, i) => `<div class="rank-item" onclick="location.href='/post.html?id=${p.id}'">

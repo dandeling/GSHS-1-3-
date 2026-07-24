@@ -14,6 +14,11 @@
       <label>🍽️ 오늘의 급식</label>
       <textarea id="mealInput" style="min-height:90px" placeholder="오늘 급식 메뉴를 입력하세요 (비우고 저장하면 삭제)"></textarea>
       <div class="row" style="margin-top:8px"><button id="mealSave" class="btn-sm">급식 저장</button><span id="mealMsg" class="muted"></span></div>
+      <p class="muted" style="margin-top:6px">비워두면 NEIS(교육청) 급식이 자동 표시됩니다. 직접 입력하면 그 내용이 우선돼요.</p>
+      <hr />
+      <label>📅 D-day 관리</label>
+      <div class="row"><input id="ddayTitle" class="grow" placeholder="예: 중간고사" style="flex:2"><input id="ddayDate" type="date" style="flex:1"><button id="ddayAdd" class="btn-sm">추가</button></div>
+      <div id="ddayList" style="margin-top:10px"></div>
     </div>
     <div class="card">
       <h2>회원 관리</h2>
@@ -47,6 +52,25 @@
       try { await api.post('/api/home/meal', { content: document.getElementById('mealInput').value }); document.getElementById('mealMsg').textContent = '저장됨 ✓'; }
       catch (e) { document.getElementById('mealMsg').textContent = e.message; }
     });
+
+    // D-day
+    async function loadDdays() {
+      const d = await api.get('/api/home/ddays');
+      document.getElementById('ddayList').innerHTML = d.ddays.length
+        ? d.ddays.map((x) => `<div class="row" style="justify-content:space-between;border-bottom:1px solid var(--line);padding:6px 0">
+            <span><b>${esc(x.title)}</b> <span class="muted">${x.target_date} · ${x.dleft<0?'지남':(x.dleft===0?'D-DAY':'D-'+x.dleft)}</span></span>
+            <button class="btn-sm btn-danger" data-dd="${x.id}">삭제</button></div>`).join('')
+        : '<span class="muted">등록된 D-day가 없어요.</span>';
+      document.querySelectorAll('[data-dd]').forEach((b) => b.addEventListener('click', async () => { await api.del('/api/home/ddays/' + b.dataset.dd); loadDdays(); }));
+    }
+    document.getElementById('ddayAdd').addEventListener('click', async () => {
+      const title = document.getElementById('ddayTitle').value.trim();
+      const date = document.getElementById('ddayDate').value;
+      if (!title || !date) return;
+      try { await api.post('/api/home/ddays', { title, target_date: date }); document.getElementById('ddayTitle').value=''; loadDdays(); }
+      catch (e) { showMsg(msg, e.message); }
+    });
+    loadDdays();
 
     async function load() {
       const d = await api.get('/api/admin/users' + (filter ? '?status=' + filter : ''));

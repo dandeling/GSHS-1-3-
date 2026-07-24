@@ -90,6 +90,7 @@ export async function renderNav(opts = {}) {
     <a class="sb-link" href="/"><span class="e">🏠</span> 홈 · 전체 글</a>
     <a class="sb-link" href="/board.html?board=free&sort=popular"><span class="e">🔥</span> 인기글</a>
     ${authed ? '<a class="sb-link" href="/write.html?board=free"><span class="e">✏️</span> 글쓰기</a>' : ''}
+    ${authed ? '<a class="sb-link" href="/profile.html"><span class="e">👤</span> 내 프로필</a>' : ''}
     <a class="sb-link" href="/board.html?board=notice"><span class="e">📢</span> 공지사항</a>
     <a class="sb-link" href="/board.html?board=resource"><span class="e">📚</span> 자료공유</a>
     <a class="sb-link" href="/chat.html"><span class="e">⚡</span> 반 채팅방</a>
@@ -194,7 +195,7 @@ export function renderDcTable(posts, tagName, subjName) {
     return `<tr class="${p.board==='notice'?'is-notice':''}" onclick="location.href='/post.html?id=${p.id}'">
       <td class="c-no">${noCell}</td>
       <td class="c-subj">${head}<span class="subj-title">${esc(p.title)}</span>${cmt}</td>
-      <td class="c-user"><span class="lv-dot" title="${p.author_role==='admin'?'운영자':lv.name}">${lvIcon}</span>${esc(p.author)}</td>
+      <td class="c-user"><span class="lv-dot" title="${p.author_role==='admin'?'운영자':lv.name}">${lvIcon}</span><span class="clickable-user" onclick="event.stopPropagation();location.href='/profile.html?u=${encodeURIComponent(p.author).replace(/'/g, '%27')}'">${esc(p.author)}</span></td>
       <td class="c-date">${fmt(p.created_at)}</td>
       <td class="c-num c-views">${p.views}</td>
       <td class="c-num c-reco"><span class="reco">${p.like_count}</span></td>

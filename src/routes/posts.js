@@ -80,7 +80,7 @@ router.get('/:id', requireAuth, (req, res) => {
   post.views += 1;
 
   const comments = db.prepare(`
-    SELECT c.id, c.content, c.created_at, c.author_id, u.username AS author, u.point AS author_point, u.role AS author_role
+    SELECT c.id, c.content, c.created_at, c.author_id, c.parent_id, u.username AS author, u.point AS author_point, u.role AS author_role
     FROM comments c JOIN users u ON u.id = c.author_id
     WHERE c.post_id = ? AND c.deleted_at IS NULL
     ORDER BY c.id ASC
@@ -89,7 +89,32 @@ router.get('/:id', requireAuth, (req, res) => {
   post.like_count = db.prepare('SELECT COUNT(*) c FROM likes WHERE post_id=?').get(post.id).c;
   post.liked = !!db.prepare('SELECT 1 FROM likes WHERE post_id=? AND user_id=?').get(post.id, req.user.id);
 
-  res.json({ post, comments, me: { id: req.user.id, role: req.user.role } });
+  res.json({ post, comments, poll: loadPoll(post.id, req.user.id), me: { id: req.user.id, role: req.user.role } });
+});
+
+// 게시글의 투표 정보 로드 (없으면 null)
+function loadPoll(postId, userId) {
+  const poll = db.prepare('SELECT * FROM polls WHERE post_id=?').get(postId);
+  if (!poll) return null;
+  const options = db.prepare(`
+    SELECT o.id, o.text, (SELECT COUNT(*) FROM poll_votes v WHERE v.option_id=o.id) AS votes
+    FROM poll_options o WHERE o.poll_id=? ORDER BY o.idx ASC
+  `).all(poll.id);
+  const myVote = db.prepare('SELECT option_id FROM poll_votes WHERE poll_id=? AND user_id=?').get(poll.id, userId);
+  const total = options.reduce((s, o) => s + o.votes, 0);
+  return { id: poll.id, question: poll.question, options, total, myOption: myVote?.option_id || null };
+}
+
+// 투표하기 (1인 1표, 변경 가능)
+router.post('/:id/poll/vote', requireAuth, (req, res) => {
+  const poll = db.prepare('SELECT p.* FROM polls p JOIN posts po ON po.id=p.post_id WHERE p.post_id=? AND po.deleted_at IS NULL').get(req.params.id);
+  if (!poll) return res.status(404).json({ error: '투표를 찾을 수 없습니다.' });
+  const { option_id } = req.body || {};
+  const opt = db.prepare('SELECT id FROM poll_options WHERE id=? AND poll_id=?').get(option_id, poll.id);
+  if (!opt) return res.status(400).json({ error: '선택지를 확인하세요.' });
+  db.prepare(`INSERT INTO poll_votes (poll_id, user_id, option_id) VALUES (?, ?, ?)
+    ON CONFLICT(poll_id, user_id) DO UPDATE SET option_id=excluded.option_id`).run(poll.id, req.user.id, option_id);
+  res.json({ ok: true, poll: loadPoll(poll.post_id, req.user.id) });
 });
 
 // 좋아요 토글
@@ -136,6 +161,17 @@ router.post('/', requireAuth, (req, res) => {
 
   logAudit('post', info.lastInsertRowid, 'create', JSON.stringify({ title, content }), req.user.id);
   addPoint(req.user.id, 5); // 글 작성 +5
+
+  // 투표 첨부 (자유게시판)
+  const poll = req.body?.poll;
+  if (board === 'free' && poll && poll.question?.trim() && Array.isArray(poll.options)) {
+    const opts = poll.options.map((o) => String(o).trim()).filter(Boolean).slice(0, 8);
+    if (opts.length >= 2) {
+      const pinfo = db.prepare('INSERT INTO polls (post_id, question) VALUES (?, ?)').run(info.lastInsertRowid, poll.question.trim());
+      const ins = db.prepare('INSERT INTO poll_options (poll_id, idx, text) VALUES (?, ?, ?)');
+      opts.forEach((t, i) => ins.run(pinfo.lastInsertRowid, i, t));
+    }
+  }
   res.json({ ok: true, id: info.lastInsertRowid });
 });
 
@@ -189,8 +225,16 @@ router.get('/:id/trace', requireAuth, (req, res) => {
 router.post('/:id/comments', requireAuth, (req, res) => {
   const post = db.prepare('SELECT id FROM posts WHERE id=? AND deleted_at IS NULL').get(req.params.id);
   if (!post) return res.status(404).json({ error: '글을 찾을 수 없습니다.' });
-  const { content } = req.body || {};
+  const { content, parent_id } = req.body || {};
   if (!content?.trim()) return res.status(400).json({ error: '댓글 내용을 입력하세요.' });
+
+  // 대댓글: 부모 댓글이 같은 글에 속하는지 확인
+  let parent = null;
+  if (parent_id) {
+    const pc = db.prepare('SELECT id, post_id, parent_id FROM comments WHERE id=? AND deleted_at IS NULL').get(parent_id);
+    if (!pc || pc.post_id !== post.id) return res.status(400).json({ error: '원 댓글을 찾을 수 없습니다.' });
+    parent = pc.parent_id || pc.id; // 2단계까지만 (대댓글의 대댓글은 같은 부모로)
+  }
 
   // 비속어 → 벌점
   let penalty = null;
@@ -199,8 +243,8 @@ router.post('/:id/comments', requireAuth, (req, res) => {
     penalty = { demerit: after.demerit, status: after.status };
   }
 
-  const info = db.prepare('INSERT INTO comments (post_id, author_id, content) VALUES (?, ?, ?)')
-    .run(post.id, req.user.id, content.trim());
+  const info = db.prepare('INSERT INTO comments (post_id, author_id, content, parent_id) VALUES (?, ?, ?, ?)')
+    .run(post.id, req.user.id, content.trim(), parent);
   logAudit('comment', info.lastInsertRowid, 'create', content, req.user.id);
   addPoint(req.user.id, 2); // 댓글 작성 +2
   res.json({ ok: true, id: info.lastInsertRowid, penalty });

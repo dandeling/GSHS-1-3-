@@ -26,6 +26,17 @@
         <input id="title" maxlength="120" placeholder="제목을 입력하세요" required />
         <label>내용</label>
         <textarea id="content" placeholder="내용을 입력하세요" required></textarea>
+
+        <!-- 투표 첨부 (자유게시판, 새 글만) -->
+        <div id="pollField" class="hidden">
+          <label><input type="checkbox" id="pollOn" style="width:auto;margin-right:6px">🗳️ 투표 추가</label>
+          <div id="pollInputs" class="hidden" style="margin-top:6px">
+            <input id="pollQ" placeholder="투표 질문 (예: 반티 뭐로 할까?)" maxlength="100" />
+            <div id="pollOpts" style="margin-top:8px"></div>
+            <button type="button" id="addOpt" class="btn-ghost btn-sm" style="margin-top:6px">+ 선택지 추가</button>
+          </div>
+        </div>
+
         <div class="row" style="margin-top:16px">
           <button type="submit">저장</button>
           <a href="javascript:history.back()" class="btn btn-ghost">취소</a>
@@ -57,12 +68,22 @@
       document.getElementById('form').classList.add('hidden');
     }
 
-    // 자유게시판: 말머리 알약
+    // 자유게시판: 말머리 알약 + 투표
     if (board === 'free') {
       document.getElementById('tagField').classList.remove('hidden');
       const tp = document.getElementById('tagPills');
       const render = () => { tp.innerHTML = meta.tags.map((t) => `<span class="pill ${selectedTag===t.code?'active':''}" data-t="${t.code}">${t.emoji} ${t.name}</span>`).join(''); tp.querySelectorAll('[data-t]').forEach((el)=>el.addEventListener('click',()=>{selectedTag=el.dataset.t;render();})); };
       render();
+
+      // 투표는 새 글 작성 시에만
+      if (!editId) {
+        document.getElementById('pollField').classList.remove('hidden');
+        const optsBox = document.getElementById('pollOpts');
+        const addOpt = (val='') => { const d = document.createElement('div'); d.className='poll-add-opt'; d.innerHTML = `<input class="grow poll-o" placeholder="선택지" maxlength="60" value="${val}"><button type="button" class="btn-ghost btn-sm rm">✕</button>`; d.querySelector('.rm').addEventListener('click',()=>d.remove()); optsBox.appendChild(d); };
+        addOpt(); addOpt();
+        document.getElementById('addOpt').addEventListener('click', () => { if (optsBox.children.length < 8) addOpt(); });
+        document.getElementById('pollOn').addEventListener('change', (e) => document.getElementById('pollInputs').classList.toggle('hidden', !e.target.checked));
+      }
     }
 
     // 자료게시판: 과목/분류
@@ -78,7 +99,14 @@
     document.getElementById('form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const body = { board, title: document.getElementById('title').value.trim(), content: document.getElementById('content').value.trim() };
-      if (board === 'free') body.tag = selectedTag;
+      if (board === 'free') {
+        body.tag = selectedTag;
+        if (!editId && document.getElementById('pollOn')?.checked) {
+          const q = document.getElementById('pollQ').value.trim();
+          const opts = [...document.querySelectorAll('.poll-o')].map((i) => i.value.trim()).filter(Boolean);
+          if (q && opts.length >= 2) body.poll = { question: q, options: opts };
+        }
+      }
       if (board === 'resource') { body.subject = document.getElementById('subject').value; body.category = document.getElementById('category').value; }
       try {
         if (editId) { await api.put('/api/posts/' + editId, body); location.href = '/post.html?id=' + editId; }
