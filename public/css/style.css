@@ -136,18 +136,38 @@ textarea { min-height: 180px; resize: vertical; }
 .search-row .search::before { content: "🔍"; position: absolute; left: 15px; top: 50%; transform: translateY(-50%); font-size: 14px; }
 .search-row select { width: auto; border-radius: 999px; font-weight: 700; flex: none; }
 
-/* ===== 글 목록 (카드형) ===== */
-.post-item {
-  display: block; padding: 15px 4px; border-bottom: 1px solid var(--line); cursor: pointer;
-}
-.post-item:last-child { border-bottom: none; }
-.post-item:hover .p-title { color: var(--green); }
-.p-top { display: flex; gap: 6px; align-items: center; margin-bottom: 3px; flex-wrap: wrap; }
+/* ===== 글 목록 (디시인사이드 스타일 게시판 표) ===== */
 .tag-chip { font-size: 11px; font-weight: 800; color: var(--green); background: color-mix(in srgb, var(--green) 12%, transparent); padding: 2px 8px; border-radius: 999px; }
 .tag-chip.notice { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
+.p-top { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .p-title { font-weight: 700; font-size: 15.5px; }
-.p-meta { display: flex; gap: 12px; color: var(--muted); font-size: 12.5px; margin-top: 5px; }
-.p-meta b { color: var(--like); font-weight: 700; }
+
+.dctable { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.dctable thead th {
+  background: var(--accent); color: var(--muted); font-weight: 700; font-size: 12px;
+  padding: 9px 6px; border-top: 1.5px solid var(--line-2); border-bottom: 1.5px solid var(--line-2); text-align: center;
+}
+.dctable tbody td { padding: 9px 6px; border-bottom: 1px solid var(--line); text-align: center; color: var(--muted); vertical-align: middle; }
+.dctable tbody tr { cursor: pointer; }
+.dctable tbody tr:hover { background: var(--accent); }
+.dctable .c-no   { width: 46px; font-size: 12.5px; }
+.dctable .c-subj { text-align: left; }
+.dctable .c-user { width: 84px; max-width: 84px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.dctable .c-date { width: 56px; font-size: 12px; }
+.dctable .c-num  { width: 40px; font-size: 12.5px; }
+.dctable .subj-title { color: var(--text); font-weight: 600; }
+.dctable tr:hover .subj-title { color: var(--green); }
+.dctable .cmt { color: var(--like); font-weight: 800; font-size: 12px; margin-left: 4px; }
+.dctable .reco { color: var(--like); font-weight: 800; }
+.dctable tr.is-notice { background: color-mix(in srgb, var(--warn) 8%, var(--card)); }
+.dctable tr.is-notice .subj-title { font-weight: 800; }
+.notice-badge { display: inline-block; background: var(--danger); color: #fff; font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 5px; }
+.dctable .thumb-icon { margin-right: 3px; }
+/* 좁은 화면: 조회/추천 숨김 */
+@media (max-width: 520px) {
+  .dctable .c-views, .dctable .c-reco, .hide-sm { display: none; }
+  .dctable .c-user { width: 66px; max-width: 66px; }
+}
 
 /* 인기글 랭킹 */
 .rank-item { display: flex; gap: 12px; align-items: center; padding: 10px 4px; border-bottom: 1px solid var(--line); cursor: pointer; }

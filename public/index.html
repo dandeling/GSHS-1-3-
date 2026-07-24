@@ -52,7 +52,7 @@
   <a class="fab hidden" id="fab" href="/write.html?board=free">✏️ 글쓰기</a>
 
   <script type="module">
-    import { renderNav, api, esc, fmt, qs, getMeta } from '/js/common.js';
+    import { renderNav, api, esc, fmt, qs, getMeta, renderDcTable } from '/js/common.js';
     const me = await renderNav();
 
     // 로그인 안내 / 글쓰기 버튼
@@ -106,6 +106,7 @@
     }
 
     const feedEl = document.getElementById('feed');
+    const tagName = (c) => { const t = meta.tags.find((x)=>x.code===c); return t ? `${t.emoji} ${t.name}` : ''; };
     async function loadFeed() {
       if (!me) { feedEl.innerHTML = `<div class="empty">로그인 후 글을 볼 수 있어요.</div>`; document.getElementById('pager').innerHTML=''; return; }
       const params = new URLSearchParams({ page, sort });
@@ -113,16 +114,7 @@
       else { params.set('board', 'all'); if (tag) params.set('tag', tag); }
       if (q) params.set('q', q);
       const d = await api.get('/api/posts?' + params);
-      const tagName = (c) => { const t = meta.tags.find((x)=>x.code===c); return t ? `${t.emoji} ${t.name}` : ''; };
-      feedEl.innerHTML = d.posts.length ? d.posts.map((p) => `
-        <div class="post-item" onclick="location.href='/post.html?id=${p.id}'">
-          <div class="p-top">
-            ${p.board==='notice' ? '<span class="tag-chip notice">📢 공지</span>' : (p.tag ? `<span class="tag-chip">${esc(tagName(p.tag))}</span>` : '')}
-            <span class="p-title">${esc(p.title)}</span>
-          </div>
-          <div class="p-meta"><span>${esc(p.author)}</span><span>${fmt(p.created_at)}</span><span>👁 ${p.views}</span><b>❤ ${p.like_count}</b><span>💬 ${p.comment_count}</span></div>
-        </div>`).join('') : `<div class="empty">글이 없어요. 첫 글을 남겨보세요!</div>`;
-      // 페이지네이션
+      feedEl.innerHTML = renderDcTable(d.posts, tagName);
       let html = '';
       for (let i = 1; i <= d.totalPages; i++) html += i===d.page ? `<span class="active">${i}</span>` : `<span data-pg="${i}">${i}</span>`;
       const pg = document.getElementById('pager');

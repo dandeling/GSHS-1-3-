@@ -25,7 +25,7 @@
   <a class="fab hidden" id="fab" href="#">✏️ 글쓰기</a>
 
   <script type="module">
-    import { renderNav, api, esc, fmt, qs, getMeta } from '/js/common.js';
+    import { renderNav, api, esc, fmt, qs, getMeta, renderDcTable } from '/js/common.js';
     const me = await renderNav({ requireLogin: true });
     const meta = await getMeta();
 
@@ -78,16 +78,7 @@
       const d = await api.get('/api/posts?' + params);
       const tagName = (c) => { const t = meta.tags.find((x)=>x.code===c); return t?`${t.emoji} ${t.name}`:''; };
       const subName = (c) => { const s = meta.subjects.find((x)=>x.code===c); return s?s.name:''; };
-      feedEl.innerHTML = d.posts.length ? d.posts.map((p) => `
-        <div class="post-item" onclick="location.href='/post.html?id=${p.id}'">
-          <div class="p-top">
-            ${p.board==='notice'?'<span class="tag-chip notice">📢 공지</span>':''}
-            ${p.board==='resource'&&p.subject?`<span class="tag-chip">${esc(subName(p.subject))}${p.category==='exam'?' · 시험':' · 수행'}</span>`:''}
-            ${p.board==='free'&&p.tag?`<span class="tag-chip">${esc(tagName(p.tag))}</span>`:''}
-            <span class="p-title">${esc(p.title)}</span>
-          </div>
-          <div class="p-meta"><span>${esc(p.author)}</span><span>${fmt(p.created_at)}</span><span>👁 ${p.views}</span><b>❤ ${p.like_count}</b><span>💬 ${p.comment_count}</span></div>
-        </div>`).join('') : `<div class="empty">글이 없어요.</div>`;
+      feedEl.innerHTML = renderDcTable(d.posts, tagName, subName);
       let html=''; for (let i=1;i<=d.totalPages;i++) html += i===d.page?`<span class="active">${i}</span>`:`<span data-pg="${i}">${i}</span>`;
       const pg=document.getElementById('pager'); pg.innerHTML=d.totalPages>1?html:'';
       pg.querySelectorAll('[data-pg]').forEach((s)=>s.addEventListener('click',()=>{page=+s.dataset.pg;load();scrollTo({top:0,behavior:'smooth'});}));

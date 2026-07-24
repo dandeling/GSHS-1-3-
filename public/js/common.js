@@ -120,3 +120,32 @@ export function showMsg(el, text, ok = false) {
 // 태그 코드 → {name, emoji} 캐시
 let _meta = null;
 export async function getMeta() { if (!_meta) _meta = await api.get('/api/meta'); return _meta; }
+
+// 디시인사이드 스타일 게시판 표 렌더링
+// subjName(code) 를 넘기면 자료게시판 과목명을 말머리로 표시
+export function renderDcTable(posts, tagName, subjName) {
+  if (!posts.length) return `<div class="empty">글이 없어요. 첫 글을 남겨보세요!</div>`;
+  const rows = posts.map((p) => {
+    let head = '';
+    if (p.board === 'notice') head = '';
+    else if (p.board === 'resource' && p.subject && subjName) head = `<span class="tag-chip">${esc(subjName(p.subject))}${p.category==='exam'?'·시험':'·수행'}</span> `;
+    else if (p.tag && tagName) { const n = tagName(p.tag); if (n) head = `<span class="tag-chip">${esc(n)}</span> `; }
+    const noCell = p.board === 'notice'
+      ? `<span class="notice-badge">공지</span>`
+      : p.id;
+    const cmt = p.comment_count > 0 ? `<span class="cmt">[${p.comment_count}]</span>` : '';
+    return `<tr class="${p.board==='notice'?'is-notice':''}" onclick="location.href='/post.html?id=${p.id}'">
+      <td class="c-no">${noCell}</td>
+      <td class="c-subj">${head}<span class="subj-title">${esc(p.title)}</span>${cmt}</td>
+      <td class="c-user">${esc(p.author)}</td>
+      <td class="c-date">${fmt(p.created_at)}</td>
+      <td class="c-num c-views">${p.views}</td>
+      <td class="c-num c-reco"><span class="reco">${p.like_count}</span></td>
+    </tr>`;
+  }).join('');
+  return `<div class="tbl-scroll"><table class="dctable">
+    <thead><tr><th class="c-no">번호</th><th class="c-subj" style="text-align:left">제목</th>
+      <th class="c-user">글쓴이</th><th class="c-date">날짜</th>
+      <th class="c-num c-views">조회</th><th class="c-num c-reco">추천</th></tr></thead>
+    <tbody>${rows}</tbody></table></div>`;
+}
