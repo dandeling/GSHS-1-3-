@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>로그인 · GSHS 1-3</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <main style="max-width:420px">
+    <div class="card">
+      <h1>로그인</h1>
+      <div id="msg" class="hidden"></div>
+      <form id="form">
+        <label>별명 또는 학교 이메일</label>
+        <input id="login" autocomplete="username" required />
+        <label>비밀번호</label>
+        <input id="password" type="password" autocomplete="current-password" required />
+        <div style="margin-top:16px"><button type="submit" class="grow" style="width:100%">로그인</button></div>
+      </form>
+      <p class="muted" style="margin-top:14px">계정이 없나요? <a href="/register.html">회원가입</a></p>
+      <p class="muted">※ 자동 로그인 없음 — 브라우저를 닫으면 로그아웃됩니다.</p>
+    </div>
+  </main>
+  <script type="module">
+    import { renderNav, api, showMsg } from '/js/common.js';
+    await renderNav();
+    const msg = document.getElementById('msg');
+    document.getElementById('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        await api.post('/api/auth/login', {
+          login: document.getElementById('login').value.trim(),
+          password: document.getElementById('password').value,
+        });
+        location.href = '/';
+      } catch (err) { showMsg(msg, err.message); }
+    });
+  </script>
+</body>
+</html>
