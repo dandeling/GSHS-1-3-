@@ -1,3 +1,6 @@
+/* Pretendard (프리텐다드) — 예쁜 한글 폰트, CDN 로드 */
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css");
+
 /* ===== GSHS 큰들 커뮤니티 — 따뜻한 베이지 테마 ===== */
 :root {
   --bg: #f7f4ec;            /* 따뜻한 크림 배경 */
@@ -36,7 +39,9 @@
 html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0; color: var(--text); line-height: 1.6;
-  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  font-family: 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  letter-spacing: -0.01em;
+  word-break: keep-all;
   background-color: var(--bg);
   background-image: radial-gradient(var(--dot) 1.1px, transparent 1.1px);
   background-size: 22px 22px;
