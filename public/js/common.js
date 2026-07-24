@@ -62,7 +62,7 @@ export async function renderNav(opts = {}) {
   bar.className = 'topbar';
   bar.innerHTML = `<div class="topbar-inner">
     <button class="icon-btn" id="menuBtn" aria-label="메뉴">☰</button>
-    <span class="title">큰들 <small>커뮤니티</small></span>
+    <span class="title">1-3반 <small>커뮤니티</small></span>
     <button class="icon-btn" id="themeBtn" aria-label="테마">🌙</button>
   </div>`;
   document.body.prepend(bar);
@@ -85,7 +85,7 @@ export async function renderNav(opts = {}) {
     : `<a href="/login.html" class="sb-login"><b>로그인 / 회원가입</b><span class="muted">재학생 인증 후 이용할 수 있어요</span></a>`;
   const authed = !!me;
   sb.innerHTML = `
-    <div class="sb-head"><span class="sb-title">큰들 커뮤니티</span><button class="icon-btn" id="closeBtn" style="box-shadow:none">✕</button></div>
+    <div class="sb-head"><span class="sb-title">1-3반 커뮤니티</span><button class="icon-btn" id="closeBtn" style="box-shadow:none">✕</button></div>
     ${userBox}
     <a class="sb-link" href="/"><span class="e">🏠</span> 홈 · 전체 글</a>
     <a class="sb-link" href="/board.html?board=free&sort=popular"><span class="e">🔥</span> 인기글</a>

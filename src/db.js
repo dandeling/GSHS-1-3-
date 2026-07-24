@@ -120,12 +120,22 @@ CREATE TABLE IF NOT EXISTS attendance (
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
--- 채팅방
+-- 채팅방 (공개/비밀)
 CREATE TABLE IF NOT EXISTS chat_rooms (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   name        TEXT NOT NULL,
+  is_private  INTEGER NOT NULL DEFAULT 0,   -- 0 공개, 1 비밀
+  password    TEXT,                          -- 비밀방 입장코드(bcrypt 해시)
   created_by  INTEGER,
   created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- 비밀방 참여자 (입장코드 확인한 사람)
+CREATE TABLE IF NOT EXISTS room_members (
+  room_id     INTEGER NOT NULL,
+  user_id     INTEGER NOT NULL,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (room_id, user_id)
 );
 
 -- 투표/설문 (게시글에 부착)
@@ -188,6 +198,10 @@ const mealCols = db.prepare("PRAGMA table_info(meals)").all().map((c) => c.name)
 if (!mealCols.includes('source')) {
   db.exec("ALTER TABLE meals ADD COLUMN source TEXT DEFAULT 'manual'");
 }
+// ---- 마이그레이션: chat_rooms 비밀방 컬럼 ----
+const roomCols = db.prepare("PRAGMA table_info(chat_rooms)").all().map((c) => c.name);
+if (!roomCols.includes('is_private')) db.exec("ALTER TABLE chat_rooms ADD COLUMN is_private INTEGER NOT NULL DEFAULT 0");
+if (!roomCols.includes('password')) db.exec("ALTER TABLE chat_rooms ADD COLUMN password TEXT");
 
 // 활동점수 증감 (0 미만 방지). 관리자는 등급 미적용이라 점수만 쌓아도 무방.
 export function addPoint(userId, n) {

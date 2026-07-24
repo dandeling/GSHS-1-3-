@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>채팅방 · 큰들 커뮤니티</title>
+  <title>채팅방 · 1-3반 커뮤니티</title>
   <link rel="stylesheet" href="/css/style.css" />
 </head>
 <body>
@@ -30,13 +30,24 @@
       const d = await api.get('/api/chat/rooms');
       rooms = d.rooms;
       const tabs = document.getElementById('roomTabs');
-      tabs.innerHTML = rooms.map((r) => `<span class="room-tab ${r.id===curRoom?'active':''}" data-room="${r.id}">${esc(r.name)} <span class="muted">${r.msg_count}</span></span>`).join('');
+      tabs.innerHTML = rooms.map((r) => {
+        const lock = r.is_private ? (r.joined ? '🔓 ' : '🔒 ') : '';
+        return `<span class="room-tab ${r.id===curRoom?'active':''}" data-room="${r.id}">${lock}${esc(r.name)} <span class="muted">${r.msg_count}</span></span>`;
+      }).join('');
       tabs.querySelectorAll('[data-room]').forEach((el) => el.addEventListener('click', () => switchRoom(+el.dataset.room)));
     }
 
-    function switchRoom(id) {
+    async function switchRoom(id) {
+      const room = rooms.find((r) => r.id === id);
+      // 비밀방인데 아직 입장 안 했으면 입장코드 요청
+      if (room && room.is_private && !room.joined) {
+        const pw = prompt(`🔒 "${room.name}" 비밀방 입장코드:`);
+        if (pw === null) return;
+        try { await api.post(`/api/chat/rooms/${id}/join`, { password: pw }); }
+        catch (err) { showMsg(document.getElementById('msg'), err.message); return; }
+      }
       curRoom = id; lastId = 0; box.innerHTML = '';
-      loadRooms(); poll();
+      await loadRooms(); poll();
     }
 
     function render(messages) {
@@ -76,8 +87,15 @@
 
     document.getElementById('newRoom').addEventListener('click', async () => {
       const name = prompt('새 채팅방 이름:'); if (!name?.trim()) return;
-      try { const r = await api.post('/api/chat/rooms', { name: name.trim() }); await loadRooms(); switchRoom(r.id); }
-      catch (err) { showMsg(document.getElementById('msg'), err.message); }
+      const isPrivate = confirm('비밀 단톡방으로 만들까요?\n\n[확인] = 🔒 비밀방 (입장코드 필요)\n[취소] = 🌐 공개방 (누구나 입장)');
+      let password = null;
+      if (isPrivate) { password = prompt('입장코드를 정하세요 (2자 이상):'); if (!password || password.length < 2) { alert('입장코드가 필요합니다.'); return; } }
+      try {
+        const r = await api.post('/api/chat/rooms', { name: name.trim(), is_private: isPrivate, password });
+        curRoom = r.id; lastId = 0; box.innerHTML = '';
+        await loadRooms(); poll();
+        if (isPrivate) showMsg(document.getElementById('msg'), `🔒 비밀방 생성! 입장코드를 친구에게 공유하세요.`, true);
+      } catch (err) { showMsg(document.getElementById('msg'), err.message); }
     });
 
     await loadRooms();

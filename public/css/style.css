@@ -1,7 +1,7 @@
 /* Pretendard (프리텐다드) — 예쁜 한글 폰트, CDN 로드 */
 @import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css");
 
-/* ===== GSHS 큰들 커뮤니티 — 따뜻한 베이지 테마 ===== */
+/* ===== GSHS 1-3반 커뮤니티 — 따뜻한 베이지 테마 ===== */
 :root {
   --bg: #f7f4ec;            /* 따뜻한 크림 배경 */
   --dot: #e7e1d3;          /* 배경 점 패턴 */
