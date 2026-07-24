@@ -170,6 +170,17 @@ router.post('/reset-password', (req, res) => {
   res.json({ ok: true, message: '비밀번호가 변경됐어요. 새 비밀번호로 로그인하세요.' });
 });
 
+// 별명(로그인 아이디) 변경 (로그인 상태)
+router.post('/change-username', requireAuth, (req, res) => {
+  const username = String(req.body?.username || '').trim();
+  if (username.length < 1 || username.length > 20) return res.status(400).json({ error: '별명은 1~20자로 입력하세요.' });
+  if (username === req.user.username) return res.status(400).json({ error: '현재 별명과 동일합니다.' });
+  const dup = db.prepare('SELECT id FROM users WHERE username=? AND id!=?').get(username, req.user.id);
+  if (dup) return res.status(409).json({ error: '이미 사용 중인 별명입니다.' });
+  db.prepare('UPDATE users SET username=? WHERE id=?').run(username, req.user.id);
+  res.json({ ok: true, username });
+});
+
 // 비밀번호 변경 (로그인 상태, 현재 비번 확인)
 router.post('/change-password', requireAuth, (req, res) => {
   const { currentPassword, newPassword } = req.body || {};
