@@ -28,5 +28,15 @@ export const CATEGORY_CODES = CATEGORIES.map((c) => c.code);
 
 export const BOARDS = ['notice', 'free', 'resource'];
 
+// 자유게시판 글 말머리(태그) — 참고 사이트의 카테고리 알약
+export const TAGS = [
+  { code: 'talk',   name: '자유',   emoji: '💬' },
+  { code: 'ask',    name: '질문',   emoji: '❓' },
+  { code: 'info',   name: '정보',   emoji: '📌' },
+  { code: 'club',   name: '동아리', emoji: '🎈' },
+  { code: 'event',  name: '이벤트', emoji: '🎉' },
+];
+export const TAG_CODES = TAGS.map((t) => t.code);
+
 // 학교 이메일 형식: (기수)gshs-(학번)@g.gne.go.kr  예) 43gshs-1319@g.gne.go.kr
 export const SCHOOL_EMAIL_REGEX = /^(\d{1,3})gshs-(\d{3,5})@g\.gne\.go\.kr$/;

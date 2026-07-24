@@ -3,28 +3,141 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GSHS 1-3 커뮤니티</title>
+  <title>큰들 커뮤니티 · 경남과학고</title>
   <link rel="stylesheet" href="/css/style.css" />
 </head>
 <body>
   <main>
-    <div class="card">
-      <h1>🏫 우리 반 커뮤니티</h1>
-      <p class="muted">GSHS 1학년 3반 전용 공간입니다. 로그인 후 이용하세요.</p>
+    <!-- 히어로 -->
+    <div class="card hero">
+      <div class="row" style="align-items:flex-start">
+        <div class="grow">
+          <div class="eyebrow">Student Board · 경남과학고등학교</div>
+          <div class="big">큰들 커뮤니티</div>
+          <div class="desc">우리 학교 학생만의 자유게시판 🐝 편하게 써보세요</div>
+        </div>
+        <div class="logo-circle">큰들</div>
+      </div>
+      <div id="authCta"></div>
     </div>
-    <div class="grid" id="menu">
-      <a class="menu-card" href="/board.html?board=notice"><div class="emoji">📢</div><div class="t">공지사항</div><div class="d">관리자 공지</div></a>
-      <a class="menu-card" href="/board.html?board=free"><div class="emoji">💬</div><div class="t">자유게시판</div><div class="d">자유롭게 이야기</div></a>
-      <a class="menu-card" href="/board.html?board=resource"><div class="emoji">📚</div><div class="t">자료공유</div><div class="d">과목별 수행/시험 자료</div></a>
-      <a class="menu-card" href="/chat.html"><div class="emoji">⚡</div><div class="t">반 채팅방</div><div class="d">실시간 채팅</div></a>
-      <a class="menu-card" href="/calendar.html"><div class="emoji">📅</div><div class="t">캘린더</div><div class="d">우리 반 일정</div></a>
-      <a class="menu-card admin-only hidden" href="/admin.html"><div class="emoji">🛠️</div><div class="t">관리자 페이지</div><div class="d">가입 승인·회원 관리</div></a>
+
+    <!-- 오늘의 급식 -->
+    <div class="section-title">🍽️ 오늘의 급식 <span class="sub" id="mealDate"></span><span class="line"></span></div>
+    <div class="card" id="mealCard"><div class="empty">불러오는 중…</div></div>
+
+    <!-- 지금 인기 있는 글 -->
+    <div class="section-title">📌 지금 인기 있는 글<span class="line"></span></div>
+    <div class="card" id="popularCard"><div class="empty">불러오는 중…</div></div>
+
+    <!-- 명예의 전당 -->
+    <div class="section-title">🏆 명예의 전당 <span class="sub">이달의 인기 글쓴이</span><span class="line"></span></div>
+    <div class="card" id="fameCard"><div class="empty">불러오는 중…</div></div>
+
+    <!-- 카테고리 + 검색 + 글 목록 -->
+    <div class="section-title">📝 전체 글<span class="line"></span></div>
+    <div class="card">
+      <div class="pills" id="pills"></div>
+      <div class="search-row">
+        <div class="search grow"><input id="q" placeholder="제목·내용 검색" /></div>
+        <select id="sort">
+          <option value="recent">최신순</option>
+          <option value="popular">인기순</option>
+        </select>
+      </div>
+      <div id="feed" style="margin-top:8px"></div>
+      <div class="pager" id="pager"></div>
     </div>
   </main>
+
+  <a class="fab hidden" id="fab" href="/write.html?board=free">✏️ 글쓰기</a>
+
   <script type="module">
-    import { renderNav } from '/js/common.js';
+    import { renderNav, api, esc, fmt, qs, getMeta } from '/js/common.js';
     const me = await renderNav();
-    if (me && me.role === 'admin') document.querySelector('.admin-only')?.classList.remove('hidden');
+
+    // 로그인 안내 / 글쓰기 버튼
+    if (!me) {
+      document.getElementById('authCta').innerHTML = `<a class="btn btn-block" href="/login.html" style="margin-top:8px">로그인 / 회원가입</a>
+        <p class="muted" style="text-align:center;margin-top:10px">재학생 전용 · 학교 이메일로 로그인하면 게시글을 볼 수 있어요</p>`;
+    } else {
+      document.getElementById('fab').classList.remove('hidden');
+    }
+
+    // 홈 대시보드
+    try {
+      const h = await api.get('/api/home');
+      const md = new Date(h.today);
+      document.getElementById('mealDate').textContent = `${md.getMonth()+1}월 ${md.getDate()}일`;
+      document.getElementById('mealCard').innerHTML = h.meal
+        ? `<div style="white-space:pre-wrap;font-size:15px">${esc(h.meal.content)}</div>`
+        : `<div class="empty">오늘은 등록된 급식 정보가 없어요. (주말·방학 등)</div>`;
+
+      document.getElementById('popularCard').innerHTML = h.popular.length
+        ? h.popular.map((p, i) => `<div class="rank-item" onclick="location.href='/post.html?id=${p.id}'">
+            <div class="rank-no">${i+1}</div>
+            <div class="grow"><div class="p-title">${esc(p.title)}</div>
+            <div class="p-meta"><span>${esc(p.author)}</span><span>👁 ${p.views}</span><b>❤ ${p.like_count}</b><span>💬 ${p.comment_count}</span></div></div>
+          </div>`).join('')
+        : `<div class="empty">아직 게시글이 없어요.</div>`;
+
+      const medals = ['🥇','🥈','🥉'];
+      document.getElementById('fameCard').innerHTML = h.hallOfFame.length
+        ? `<div class="fame">${h.hallOfFame.map((f, i) => `<div class="fame-card">
+            <div class="fame-medal">${medals[i]}</div><div class="fame-name">${esc(f.author)}</div>
+            <div class="fame-stat">글 ${f.post_count} · ❤ ${f.like_count}</div></div>`).join('')}</div>`
+        : `<div class="empty">아직 명예의 전당 기록이 없어요.</div>`;
+    } catch (e) {
+      // 미로그인 시 홈 API 401 → 조용히 안내
+      ['mealCard','popularCard','fameCard'].forEach((id) =>
+        document.getElementById(id).innerHTML = `<div class="empty">로그인하면 볼 수 있어요.</div>`);
+    }
+
+    // 카테고리 알약
+    let tag = qs('tag') || '';
+    let sort = qs('sort') || 'recent';
+    let q = '';
+    let page = 1;
+    const meta = await getMeta().catch(() => ({ tags: [] }));
+    const pillsEl = document.getElementById('pills');
+    const pills = [{ code: '', name: '전체' }, { code: '__notice', name: '📢 공지' }, ...meta.tags.map((t) => ({ code: t.code, name: `${t.emoji} ${t.name}` }))];
+    function renderPills() {
+      pillsEl.innerHTML = pills.map((p) => `<span class="pill ${((tag||'')===p.code)?'active':''}" data-tag="${p.code}">${esc(p.name)}</span>`).join('');
+      pillsEl.querySelectorAll('.pill').forEach((el) => el.addEventListener('click', () => { tag = el.dataset.tag; page = 1; loadFeed(); renderPills(); }));
+    }
+
+    const feedEl = document.getElementById('feed');
+    async function loadFeed() {
+      if (!me) { feedEl.innerHTML = `<div class="empty">로그인 후 글을 볼 수 있어요.</div>`; document.getElementById('pager').innerHTML=''; return; }
+      const params = new URLSearchParams({ page, sort });
+      if (tag === '__notice') params.set('board', 'notice');
+      else { params.set('board', 'all'); if (tag) params.set('tag', tag); }
+      if (q) params.set('q', q);
+      const d = await api.get('/api/posts?' + params);
+      const tagName = (c) => { const t = meta.tags.find((x)=>x.code===c); return t ? `${t.emoji} ${t.name}` : ''; };
+      feedEl.innerHTML = d.posts.length ? d.posts.map((p) => `
+        <div class="post-item" onclick="location.href='/post.html?id=${p.id}'">
+          <div class="p-top">
+            ${p.board==='notice' ? '<span class="tag-chip notice">📢 공지</span>' : (p.tag ? `<span class="tag-chip">${esc(tagName(p.tag))}</span>` : '')}
+            <span class="p-title">${esc(p.title)}</span>
+          </div>
+          <div class="p-meta"><span>${esc(p.author)}</span><span>${fmt(p.created_at)}</span><span>👁 ${p.views}</span><b>❤ ${p.like_count}</b><span>💬 ${p.comment_count}</span></div>
+        </div>`).join('') : `<div class="empty">글이 없어요. 첫 글을 남겨보세요!</div>`;
+      // 페이지네이션
+      let html = '';
+      for (let i = 1; i <= d.totalPages; i++) html += i===d.page ? `<span class="active">${i}</span>` : `<span data-pg="${i}">${i}</span>`;
+      const pg = document.getElementById('pager');
+      pg.innerHTML = d.totalPages > 1 ? html : '';
+      pg.querySelectorAll('[data-pg]').forEach((s) => s.addEventListener('click', () => { page = +s.dataset.pg; loadFeed(); scrollTo({top: feedEl.offsetTop-60, behavior:'smooth'}); }));
+    }
+
+    // 검색/정렬 이벤트
+    let t;
+    document.getElementById('q').addEventListener('input', (e) => { clearTimeout(t); t = setTimeout(() => { q = e.target.value.trim(); page = 1; loadFeed(); }, 300); });
+    document.getElementById('sort').value = sort;
+    document.getElementById('sort').addEventListener('change', (e) => { sort = e.target.value; page = 1; loadFeed(); });
+
+    renderPills();
+    loadFeed();
   </script>
 </body>
 </html>

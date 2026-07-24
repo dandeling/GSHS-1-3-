@@ -3,100 +3,101 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>게시판 · GSHS 1-3</title>
+  <title>게시판 · 큰들 커뮤니티</title>
   <link rel="stylesheet" href="/css/style.css" />
 </head>
 <body>
   <main>
     <div class="card">
-      <div class="row">
-        <h1 id="title" class="grow" style="margin:0"></h1>
-        <a id="writeBtn" class="btn btn-sm hidden" href="#">✏️ 글쓰기</a>
+      <h1 id="title"></h1>
+      <p class="muted" id="subtitle"></p>
+      <!-- 자료: 과목/분류 / 자유: 말머리 -->
+      <div class="pills" id="pills1"></div>
+      <div class="pills" id="pills2"></div>
+      <div class="search-row">
+        <div class="search grow"><input id="q" placeholder="제목·내용 검색" /></div>
+        <select id="sort"><option value="recent">최신순</option><option value="popular">인기순</option></select>
       </div>
-      <div id="resourceTabs" class="hidden">
-        <div class="tabs" id="subjectTabs"></div>
-        <div class="tabs" id="categoryTabs"></div>
-      </div>
-    </div>
-    <div class="card">
-      <div class="tbl-scroll">
-        <table>
-          <thead>
-            <tr><th style="width:60px" class="center">번호</th><th>제목</th><th style="width:110px">작성자</th><th style="width:130px" class="nowrap">작성일</th><th style="width:60px" class="center">조회</th></tr>
-          </thead>
-          <tbody id="list"></tbody>
-        </table>
-      </div>
+      <div id="feed" style="margin-top:8px"></div>
       <div class="pager" id="pager"></div>
     </div>
   </main>
+  <a class="fab hidden" id="fab" href="#">✏️ 글쓰기</a>
+
   <script type="module">
-    import { renderNav, api, esc, fmt, qs } from '/js/common.js';
+    import { renderNav, api, esc, fmt, qs, getMeta } from '/js/common.js';
     const me = await renderNav({ requireLogin: true });
+    const meta = await getMeta();
 
-    const BOARD_NAMES = { notice: '📢 공지사항', free: '💬 자유게시판', resource: '📚 자료공유게시판' };
     const board = qs('board') || 'free';
-    const subject = qs('subject');
-    const category = qs('category');
-    const page = parseInt(qs('page') || '1', 10);
+    let subject = qs('subject') || '';
+    let category = qs('category') || '';
+    let tag = qs('tag') || '';
+    let sort = qs('sort') || 'recent';
+    let q = ''; let page = 1;
 
-    document.getElementById('title').textContent = BOARD_NAMES[board] || '게시판';
+    const NAMES = { notice: '📢 공지사항', free: '💬 자유게시판', resource: '📚 자료공유게시판' };
+    const SUBS = { notice: '관리자가 올리는 공지입니다.', free: '자유롭게 이야기하고 질문하세요.', resource: '과목별 수행평가·시험 자료를 공유해요.' };
+    document.getElementById('title').textContent = NAMES[board] || '게시판';
+    document.getElementById('subtitle').textContent = SUBS[board] || '';
+    document.getElementById('sort').value = sort;
 
-    // 글쓰기 버튼: 공지는 관리자만
-    const writeBtn = document.getElementById('writeBtn');
+    // 글쓰기 버튼 (공지는 관리자만)
+    const fab = document.getElementById('fab');
     if (!(board === 'notice' && me.role !== 'admin')) {
-      writeBtn.classList.remove('hidden');
+      fab.classList.remove('hidden');
       const wq = new URLSearchParams({ board });
-      if (subject) wq.set('subject', subject);
-      if (category) wq.set('category', category);
-      writeBtn.href = '/write.html?' + wq.toString();
+      if (subject) wq.set('subject', subject); if (category) wq.set('category', category); if (tag) wq.set('tag', tag);
+      fab.href = '/write.html?' + wq;
     }
 
-    // 자료 게시판: 과목/분류 탭
-    if (board === 'resource') {
-      const meta = await api.get('/api/meta');
-      document.getElementById('resourceTabs').classList.remove('hidden');
-      const st = document.getElementById('subjectTabs');
-      st.innerHTML = `<a href="/board.html?board=resource" class="${!subject ? 'active' : ''}">전체과목</a>` +
-        meta.subjects.map((s) => {
-          const q = new URLSearchParams({ board: 'resource', subject: s.code });
-          if (category) q.set('category', category);
-          return `<a href="/board.html?${q}" class="${subject === s.code ? 'active' : ''}">${esc(s.name)}</a>`;
-        }).join('');
-      const ct = document.getElementById('categoryTabs');
-      const baseCat = (c) => { const q = new URLSearchParams({ board: 'resource' }); if (subject) q.set('subject', subject); if (c) q.set('category', c); return q.toString(); };
-      ct.innerHTML = `<a href="/board.html?${baseCat('')}" class="${!category ? 'active' : ''}">전체분류</a>` +
-        meta.categories.map((c) => `<a href="/board.html?${baseCat(c.code)}" class="${category === c.code ? 'active' : ''}">${esc(c.name)}</a>`).join('');
+    const p1 = document.getElementById('pills1'), p2 = document.getElementById('pills2');
+    function renderPills() {
+      if (board === 'resource') {
+        p1.innerHTML = `<span class="pill ${!subject?'active':''}" data-s="">전체과목</span>` +
+          meta.subjects.map((s) => `<span class="pill ${subject===s.code?'active':''}" data-s="${s.code}">${esc(s.name)}</span>`).join('');
+        p2.innerHTML = `<span class="pill ${!category?'active':''}" data-c="">전체분류</span>` +
+          meta.categories.map((c) => `<span class="pill ${category===c.code?'active':''}" data-c="${c.code}">${esc(c.name)}</span>`).join('');
+        p1.querySelectorAll('[data-s]').forEach((el)=>el.addEventListener('click',()=>{subject=el.dataset.s;page=1;renderPills();load();}));
+        p2.querySelectorAll('[data-c]').forEach((el)=>el.addEventListener('click',()=>{category=el.dataset.c;page=1;renderPills();load();}));
+      } else if (board === 'free') {
+        p1.innerHTML = `<span class="pill ${!tag?'active':''}" data-t="">전체</span>` +
+          meta.tags.map((t) => `<span class="pill ${tag===t.code?'active':''}" data-t="${t.code}">${t.emoji} ${esc(t.name)}</span>`).join('');
+        p1.querySelectorAll('[data-t]').forEach((el)=>el.addEventListener('click',()=>{tag=el.dataset.t;page=1;renderPills();load();}));
+        p2.innerHTML = '';
+      } else { p1.innerHTML = ''; p2.innerHTML = ''; }
     }
 
-    // 목록 로드
-    const q = new URLSearchParams({ board, page });
-    if (subject) q.set('subject', subject);
-    if (category) q.set('category', category);
-    const data = await api.get('/api/posts?' + q.toString());
-
-    const list = document.getElementById('list');
-    if (data.posts.length === 0) {
-      list.innerHTML = `<tr><td colspan="5" class="center muted" style="padding:30px">글이 없습니다.</td></tr>`;
-    } else {
-      list.innerHTML = data.posts.map((p) => `
-        <tr class="post-row" onclick="location.href='/post.html?id=${p.id}'">
-          <td class="center muted">${p.id}</td>
-          <td>${esc(p.title)} ${p.comment_count > 0 ? `<span class="muted">[${p.comment_count}]</span>` : ''}</td>
-          <td>${esc(p.author)}</td>
-          <td class="nowrap muted">${fmt(p.created_at)}</td>
-          <td class="center muted">${p.views}</td>
-        </tr>`).join('');
+    const feedEl = document.getElementById('feed');
+    async function load() {
+      const params = new URLSearchParams({ board, page, sort });
+      if (subject) params.set('subject', subject);
+      if (category) params.set('category', category);
+      if (tag) params.set('tag', tag);
+      if (q) params.set('q', q);
+      const d = await api.get('/api/posts?' + params);
+      const tagName = (c) => { const t = meta.tags.find((x)=>x.code===c); return t?`${t.emoji} ${t.name}`:''; };
+      const subName = (c) => { const s = meta.subjects.find((x)=>x.code===c); return s?s.name:''; };
+      feedEl.innerHTML = d.posts.length ? d.posts.map((p) => `
+        <div class="post-item" onclick="location.href='/post.html?id=${p.id}'">
+          <div class="p-top">
+            ${p.board==='notice'?'<span class="tag-chip notice">📢 공지</span>':''}
+            ${p.board==='resource'&&p.subject?`<span class="tag-chip">${esc(subName(p.subject))}${p.category==='exam'?' · 시험':' · 수행'}</span>`:''}
+            ${p.board==='free'&&p.tag?`<span class="tag-chip">${esc(tagName(p.tag))}</span>`:''}
+            <span class="p-title">${esc(p.title)}</span>
+          </div>
+          <div class="p-meta"><span>${esc(p.author)}</span><span>${fmt(p.created_at)}</span><span>👁 ${p.views}</span><b>❤ ${p.like_count}</b><span>💬 ${p.comment_count}</span></div>
+        </div>`).join('') : `<div class="empty">글이 없어요.</div>`;
+      let html=''; for (let i=1;i<=d.totalPages;i++) html += i===d.page?`<span class="active">${i}</span>`:`<span data-pg="${i}">${i}</span>`;
+      const pg=document.getElementById('pager'); pg.innerHTML=d.totalPages>1?html:'';
+      pg.querySelectorAll('[data-pg]').forEach((s)=>s.addEventListener('click',()=>{page=+s.dataset.pg;load();scrollTo({top:0,behavior:'smooth'});}));
     }
 
-    // 페이지네이션
-    const pager = document.getElementById('pager');
-    const mkq = (pg) => { const c = new URLSearchParams({ board, page: pg }); if (subject) c.set('subject', subject); if (category) c.set('category', category); return '/board.html?' + c; };
-    let html = '';
-    for (let i = 1; i <= data.totalPages; i++) {
-      html += i === data.page ? `<span class="active">${i}</span>` : `<a href="${mkq(i)}">${i}</a>`;
-    }
-    pager.innerHTML = data.totalPages > 1 ? html : '';
+    let t;
+    document.getElementById('q').addEventListener('input',(e)=>{clearTimeout(t);t=setTimeout(()=>{q=e.target.value.trim();page=1;load();},300);});
+    document.getElementById('sort').addEventListener('change',(e)=>{sort=e.target.value;page=1;load();});
+
+    renderPills(); load();
   </script>
 </body>
 </html>

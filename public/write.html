@@ -3,15 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>글쓰기 · GSHS 1-3</title>
+  <title>글쓰기 · 큰들 커뮤니티</title>
   <link rel="stylesheet" href="/css/style.css" />
 </head>
 <body>
-  <main style="max-width:720px">
+  <main>
     <div class="card">
-      <h1 id="pageTitle">글쓰기</h1>
+      <h1 id="pageTitle">✏️ 글쓰기</h1>
       <div id="msg" class="hidden"></div>
       <form id="form">
+        <div id="tagField" class="hidden">
+          <label>말머리</label>
+          <div class="pills" id="tagPills"></div>
+        </div>
         <div id="resourceFields" class="hidden">
           <div class="row">
             <div class="grow"><label>과목</label><select id="subject"></select></div>
@@ -19,9 +23,9 @@
           </div>
         </div>
         <label>제목</label>
-        <input id="title" maxlength="120" required />
+        <input id="title" maxlength="120" placeholder="제목을 입력하세요" required />
         <label>내용</label>
-        <textarea id="content" required></textarea>
+        <textarea id="content" placeholder="내용을 입력하세요" required></textarea>
         <div class="row" style="margin-top:16px">
           <button type="submit">저장</button>
           <a href="javascript:history.back()" class="btn btn-ghost">취소</a>
@@ -30,35 +34,41 @@
     </div>
   </main>
   <script type="module">
-    import { renderNav, api, qs, showMsg } from '/js/common.js';
+    import { renderNav, api, qs, showMsg, getMeta } from '/js/common.js';
     const me = await renderNav({ requireLogin: true });
+    const meta = await getMeta();
     const msg = document.getElementById('msg');
     const editId = qs('id');
     let board = qs('board') || 'free';
+    let selectedTag = qs('tag') || 'talk';
 
-    // 수정 모드: 기존 글 로드
     let editing = null;
     if (editId) {
       const d = await api.get('/api/posts/' + editId);
-      editing = d.post;
-      board = editing.board;
-      document.getElementById('pageTitle').textContent = '글 수정';
+      editing = d.post; board = editing.board;
+      selectedTag = editing.tag || 'talk';
+      document.getElementById('pageTitle').textContent = '✏️ 글 수정';
       document.getElementById('title').value = editing.title;
       document.getElementById('content').value = editing.content;
     }
 
-    // 공지 권한 체크
     if (board === 'notice' && me.role !== 'admin') {
       showMsg(msg, '공지사항은 관리자만 작성할 수 있습니다.');
       document.getElementById('form').classList.add('hidden');
     }
 
-    // 자료 게시판이면 과목/분류 선택
+    // 자유게시판: 말머리 알약
+    if (board === 'free') {
+      document.getElementById('tagField').classList.remove('hidden');
+      const tp = document.getElementById('tagPills');
+      const render = () => { tp.innerHTML = meta.tags.map((t) => `<span class="pill ${selectedTag===t.code?'active':''}" data-t="${t.code}">${t.emoji} ${t.name}</span>`).join(''); tp.querySelectorAll('[data-t]').forEach((el)=>el.addEventListener('click',()=>{selectedTag=el.dataset.t;render();})); };
+      render();
+    }
+
+    // 자료게시판: 과목/분류
     if (board === 'resource') {
-      const meta = await api.get('/api/meta');
       document.getElementById('resourceFields').classList.remove('hidden');
-      const ss = document.getElementById('subject');
-      const cs = document.getElementById('category');
+      const ss = document.getElementById('subject'), cs = document.getElementById('category');
       ss.innerHTML = meta.subjects.map((s) => `<option value="${s.code}">${s.name}</option>`).join('');
       cs.innerHTML = meta.categories.map((c) => `<option value="${c.code}">${c.name}</option>`).join('');
       if (editing) { ss.value = editing.subject; cs.value = editing.category; }
@@ -67,11 +77,8 @@
 
     document.getElementById('form').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const body = {
-        board,
-        title: document.getElementById('title').value.trim(),
-        content: document.getElementById('content').value.trim(),
-      };
+      const body = { board, title: document.getElementById('title').value.trim(), content: document.getElementById('content').value.trim() };
+      if (board === 'free') body.tag = selectedTag;
       if (board === 'resource') { body.subject = document.getElementById('subject').value; body.category = document.getElementById('category').value; }
       try {
         if (editId) { await api.put('/api/posts/' + editId, body); location.href = '/post.html?id=' + editId; }

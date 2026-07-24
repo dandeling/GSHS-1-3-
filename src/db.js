@@ -85,10 +85,34 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- 좋아요(추천)
+CREATE TABLE IF NOT EXISTS likes (
+  post_id     INTEGER NOT NULL,
+  user_id     INTEGER NOT NULL,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (post_id, user_id),
+  FOREIGN KEY (post_id) REFERENCES posts(id),
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+-- 오늘의 급식 (관리자 관리)
+CREATE TABLE IF NOT EXISTS meals (
+  meal_date   TEXT PRIMARY KEY,            -- YYYY-MM-DD
+  content     TEXT NOT NULL,
+  updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_posts_board ON posts(board, subject, category);
 CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(post_id);
 CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_logs(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_likes_post ON likes(post_id);
 `);
+
+// ---- 마이그레이션: posts.tag 컬럼 (기존 DB 대비) ----
+const postCols = db.prepare("PRAGMA table_info(posts)").all().map((c) => c.name);
+if (!postCols.includes('tag')) {
+  db.exec("ALTER TABLE posts ADD COLUMN tag TEXT");
+}
 
 // ---- 기본 관리자 계정 시딩 ----
 function seedAdmin() {
