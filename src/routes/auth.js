@@ -181,6 +181,35 @@ router.post('/change-username', requireAuth, (req, res) => {
   res.json({ ok: true, username });
 });
 
+// 실명 변경 (로그인 상태)
+router.post('/change-realname', requireAuth, (req, res) => {
+  const realname = String(req.body?.realname || '').trim();
+  if (realname.length < 1 || realname.length > 20) return res.status(400).json({ error: '실명은 1~20자로 입력하세요.' });
+  db.prepare('UPDATE users SET realname=? WHERE id=?').run(realname, req.user.id);
+  res.json({ ok: true, realname });
+});
+
+// 이메일 변경 (로그인 상태)
+//  - 일반 회원: 학교 이메일 형식만 허용(기수/학번 자동 갱신)
+//  - 관리자: 일반 이메일도 허용
+router.post('/change-email', requireAuth, (req, res) => {
+  const email = String(req.body?.email || '').trim();
+  if (!email) return res.status(400).json({ error: '이메일을 입력하세요.' });
+  const dup = db.prepare('SELECT id FROM users WHERE email=? AND id!=?').get(email, req.user.id);
+  if (dup) return res.status(409).json({ error: '이미 사용 중인 이메일입니다.' });
+
+  const m = email.match(SCHOOL_EMAIL_REGEX);
+  if (req.user.role === 'admin') {
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).json({ error: '올바른 이메일 형식이 아닙니다.' });
+    if (m) db.prepare('UPDATE users SET email=?, grade=?, student_id=? WHERE id=?').run(email, parseInt(m[1], 10), m[2], req.user.id);
+    else db.prepare('UPDATE users SET email=? WHERE id=?').run(email, req.user.id);
+  } else {
+    if (!m) return res.status(400).json({ error: '학교 이메일 형식만 사용할 수 있어요. 예) 43gshs-1319@g.gne.go.kr' });
+    db.prepare('UPDATE users SET email=?, grade=?, student_id=? WHERE id=?').run(email, parseInt(m[1], 10), m[2], req.user.id);
+  }
+  res.json({ ok: true, email });
+});
+
 // 비밀번호 변경 (로그인 상태, 현재 비번 확인)
 router.post('/change-password', requireAuth, (req, res) => {
   const { currentPassword, newPassword } = req.body || {};
