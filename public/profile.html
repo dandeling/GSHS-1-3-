@@ -9,11 +9,23 @@
 <body>
   <main>
     <div class="card" id="head">불러오는 중…</div>
+
+    <!-- 비밀번호 변경 (내 프로필에서만) -->
+    <div class="card hidden" id="pwCard">
+      <h2>🔑 비밀번호 변경</h2>
+      <div id="pwMsg" class="hidden"></div>
+      <label>현재 비밀번호</label>
+      <input id="curPw" type="password" autocomplete="current-password" />
+      <label>새 비밀번호 <span class="muted">(6자 이상)</span></label>
+      <input id="newPw" type="password" autocomplete="new-password" />
+      <div style="margin-top:12px"><button id="pwChange" class="btn-sm">변경하기</button></div>
+    </div>
+
     <div class="section-title">📝 작성한 글<span class="line"></span></div>
     <div class="card"><div id="posts"></div></div>
   </main>
   <script type="module">
-    import { renderNav, api, esc, fmt, qs, getMeta, renderDcTable, levelBadge, levelOf, nextLevelInfo } from '/js/common.js';
+    import { renderNav, api, esc, fmt, qs, getMeta, renderDcTable, levelBadge, levelOf, nextLevelInfo, showMsg } from '/js/common.js';
     const me = await renderNav({ requireLogin: true });
     const meta = await getMeta();
     const uname = qs('u') || me.username;
@@ -62,6 +74,21 @@
       const tagName = (c) => { const t = meta.tags.find((x)=>x.code===c); return t?`${t.emoji} ${t.name}`:''; };
       const subName = (c) => { const x = meta.subjects.find((y)=>y.code===c); return x?x.name:''; };
       document.getElementById('posts').innerHTML = d.posts.length ? renderDcTable(d.posts.map((p)=>({...p, author: u.username, author_point: u.point, author_role: u.role})), tagName, subName) : '<div class="empty">작성한 글이 없어요.</div>';
+
+      // 내 프로필이면 비밀번호 변경 노출
+      if (d.isMe) {
+        document.getElementById('pwCard').classList.remove('hidden');
+        document.getElementById('pwChange').addEventListener('click', async () => {
+          try {
+            const r = await api.post('/api/auth/change-password', {
+              currentPassword: document.getElementById('curPw').value,
+              newPassword: document.getElementById('newPw').value,
+            });
+            document.getElementById('curPw').value = ''; document.getElementById('newPw').value = '';
+            showMsg(document.getElementById('pwMsg'), r.message, true);
+          } catch (e) { showMsg(document.getElementById('pwMsg'), e.message); }
+        });
+      }
     } catch (err) {
       document.getElementById('head').innerHTML = `<div class="empty">${esc(err.message)}</div>`;
     }

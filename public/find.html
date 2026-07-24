@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>아이디·비밀번호 찾기 · 1-3반 커뮤니티</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <main style="max-width:440px">
+    <div class="card">
+      <h1>아이디·비밀번호 찾기</h1>
+      <div class="pills" id="tabs">
+        <span class="pill active" data-t="id">아이디(별명) 찾기</span>
+        <span class="pill" data-t="pw">비밀번호 재설정</span>
+      </div>
+      <div id="msg" class="hidden"></div>
+
+      <!-- 아이디 찾기 -->
+      <div id="idPanel">
+        <label>학교 이메일</label>
+        <input id="idEmail" placeholder="43gshs-1319@g.gne.go.kr" />
+        <div style="margin-top:14px"><button id="idBtn" style="width:100%">별명 찾기</button></div>
+      </div>
+
+      <!-- 비밀번호 재설정 -->
+      <div id="pwPanel" class="hidden">
+        <label>학교 이메일</label>
+        <input id="pwEmail" placeholder="43gshs-1319@g.gne.go.kr" />
+        <label>실명 <span class="muted">(가입 시 입력한 실명)</span></label>
+        <input id="pwName" placeholder="홍길동" />
+        <label>새 비밀번호 <span class="muted">(6자 이상)</span></label>
+        <input id="pwNew" type="password" autocomplete="new-password" />
+        <div style="margin-top:14px"><button id="pwBtn" style="width:100%">비밀번호 재설정</button></div>
+        <p class="muted" style="margin-top:10px">실명이 기억나지 않으면 <a href="/inquiries.html">문의사항</a> 또는 관리자에게 문의하세요.</p>
+      </div>
+
+      <p class="muted" style="margin-top:16px"><a href="/login.html">← 로그인으로</a></p>
+    </div>
+  </main>
+  <script type="module">
+    import { renderNav, api, showMsg } from '/js/common.js';
+    await renderNav();
+    const msg = document.getElementById('msg');
+    const tabs = document.getElementById('tabs');
+
+    tabs.querySelectorAll('.pill').forEach((p) => p.addEventListener('click', () => {
+      tabs.querySelectorAll('.pill').forEach((x) => x.classList.remove('active'));
+      p.classList.add('active'); msg.classList.add('hidden');
+      document.getElementById('idPanel').classList.toggle('hidden', p.dataset.t !== 'id');
+      document.getElementById('pwPanel').classList.toggle('hidden', p.dataset.t !== 'pw');
+    }));
+
+    document.getElementById('idBtn').addEventListener('click', async () => {
+      try {
+        const d = await api.post('/api/auth/find-id', { email: document.getElementById('idEmail').value.trim() });
+        showMsg(msg, `회원님의 별명은 "${d.username}" 입니다.`, true);
+      } catch (e) { showMsg(msg, e.message); }
+    });
+
+    document.getElementById('pwBtn').addEventListener('click', async () => {
+      try {
+        const d = await api.post('/api/auth/reset-password', {
+          email: document.getElementById('pwEmail').value.trim(),
+          realname: document.getElementById('pwName').value.trim(),
+          newPassword: document.getElementById('pwNew').value,
+        });
+        showMsg(msg, d.message, true);
+        setTimeout(() => location.href = '/login.html', 1500);
+      } catch (e) { showMsg(msg, e.message); }
+    });
+  </script>
+</body>
+</html>

@@ -2,7 +2,7 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import db from '../db.js';
 import { SCHOOL_EMAIL_REGEX } from '../constants.js';
-import { issueSession, clearSession, loadUser } from '../middleware.js';
+import { issueSession, clearSession, loadUser, requireAuth } from '../middleware.js';
 
 const router = express.Router();
 
@@ -74,6 +74,43 @@ router.get('/me', (req, res) => {
   const user = loadUser(req);
   if (!user) return res.json({ user: null });
   res.json({ user: publicUser(user) });
+});
+
+// 아이디(별명) 찾기: 학교 이메일 → 별명
+router.post('/find-id', (req, res) => {
+  const { email } = req.body || {};
+  if (!email || !SCHOOL_EMAIL_REGEX.test(email)) return res.status(400).json({ error: '학교 이메일 형식을 확인하세요.' });
+  const user = db.prepare('SELECT username, status FROM users WHERE email=?').get(email);
+  if (!user) return res.status(404).json({ error: '해당 이메일로 가입된 계정이 없습니다.' });
+  res.json({ ok: true, username: user.username, status: user.status });
+});
+
+// 비밀번호 재설정: 이메일 + 실명 본인확인 → 새 비밀번호
+router.post('/reset-password', (req, res) => {
+  const { email, realname, newPassword } = req.body || {};
+  if (!email || !realname || !newPassword) return res.status(400).json({ error: '모든 항목을 입력하세요.' });
+  if (String(newPassword).length < 6) return res.status(400).json({ error: '새 비밀번호는 6자 이상이어야 합니다.' });
+  const user = db.prepare('SELECT * FROM users WHERE email=?').get(email);
+  // 정보 노출 방지: 이메일/실명 어느 쪽이 틀려도 동일 메시지
+  if (!user || user.realname !== String(realname).trim()) {
+    return res.status(400).json({ error: '이메일과 실명이 일치하지 않습니다.' });
+  }
+  if (user.role === 'admin') return res.status(400).json({ error: '관리자 계정은 이 방법으로 재설정할 수 없습니다.' });
+  const hash = bcrypt.hashSync(String(newPassword), 10);
+  db.prepare('UPDATE users SET password=? WHERE id=?').run(hash, user.id);
+  res.json({ ok: true, message: '비밀번호가 변경됐어요. 새 비밀번호로 로그인하세요.' });
+});
+
+// 비밀번호 변경 (로그인 상태, 현재 비번 확인)
+router.post('/change-password', requireAuth, (req, res) => {
+  const { currentPassword, newPassword } = req.body || {};
+  if (!currentPassword || !newPassword) return res.status(400).json({ error: '현재/새 비밀번호를 입력하세요.' });
+  if (String(newPassword).length < 6) return res.status(400).json({ error: '새 비밀번호는 6자 이상이어야 합니다.' });
+  const user = db.prepare('SELECT * FROM users WHERE id=?').get(req.user.id);
+  if (!bcrypt.compareSync(currentPassword, user.password)) return res.status(400).json({ error: '현재 비밀번호가 올바르지 않습니다.' });
+  const hash = bcrypt.hashSync(String(newPassword), 10);
+  db.prepare('UPDATE users SET password=? WHERE id=?').run(hash, user.id);
+  res.json({ ok: true, message: '비밀번호가 변경됐어요.' });
 });
 
 // 화면 노출용 사용자 정보 (실명 제외)
