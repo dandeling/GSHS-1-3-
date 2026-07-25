@@ -15,6 +15,7 @@ import usersRouter from './src/routes/users.js';
 import notificationsRouter from './src/routes/notifications.js';
 import dmRouter from './src/routes/dm.js';
 import inquiriesRouter from './src/routes/inquiries.js';
+import weeklyPollRouter from './src/routes/weeklyPoll.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -37,6 +38,7 @@ app.use('/api/users', usersRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use('/api/dm', dmRouter);
 app.use('/api/inquiries', inquiriesRouter);
+app.use('/api/weekly-poll', weeklyPollRouter);
 app.use('/api/chat', chatRouter);
 app.use('/api/calendar', calendarRouter);
 app.use('/api/admin', adminRouter);

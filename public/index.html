@@ -27,6 +27,10 @@
       </div>
     </div>
 
+    <!-- 이주의 투표 -->
+    <div class="section-title hidden" id="wpTitle">🗳️ 이주의 투표<span class="line"></span></div>
+    <div class="card hidden" id="wpCard"></div>
+
     <!-- 오늘의 급식 -->
     <div class="section-title">🍽️ 오늘의 급식 <span class="sub" id="mealDate"></span><span class="line"></span></div>
     <div class="card" id="mealCard"><div class="empty">불러오는 중…</div></div>
@@ -92,6 +96,9 @@
         ab.disabled = true; ab.textContent = '✅ 출석완료'; am.textContent = `누적 ${r.total||''}일 · +2점`;
       });
 
+      // 이주의 투표
+      await loadWeeklyPoll();
+
       document.getElementById('popularCard').innerHTML = h.popular.length
         ? h.popular.map((p, i) => `<div class="rank-item" onclick="location.href='/post.html?id=${p.id}'">
             <div class="rank-no">${i+1}</div>
@@ -111,6 +118,29 @@
       // 미로그인 시 홈 API 401 → 조용히 안내
       ['mealCard','popularCard','fameCard'].forEach((id) =>
         document.getElementById(id).innerHTML = `<div class="empty">로그인하면 볼 수 있어요.</div>`);
+    }
+
+    async function loadWeeklyPoll() {
+      let data;
+      try { data = await api.get('/api/weekly-poll'); } catch { return; }
+      const title = document.getElementById('wpTitle'), card = document.getElementById('wpCard');
+      if (!data.poll) { title.classList.add('hidden'); card.classList.add('hidden'); return; }
+      title.classList.remove('hidden'); card.classList.remove('hidden');
+      const render = (pl) => {
+        card.innerHTML = `<div class="poll" style="margin-top:0"><div class="poll-q">🗳️ ${esc(pl.question)}</div>
+          ${pl.options.map((o) => {
+            const pct = pl.total ? Math.round(o.votes / pl.total * 100) : 0;
+            const voted = pl.myOption === o.id;
+            return `<div class="poll-opt ${voted?'voted':''}" data-opt="${o.id}">
+              <div class="bar" style="width:${pl.myOption?pct:0}%"></div>
+              <div class="lbl"><span>${voted?'✓ ':''}${esc(o.text)}</span>${pl.myOption?`<span class="pct">${pct}% (${o.votes})</span>`:''}</div></div>`;
+          }).join('')}
+          <div class="poll-total">${pl.myOption?`총 ${pl.total}표`:'선택지를 눌러 투표하세요'}</div></div>`;
+        card.querySelectorAll('[data-opt]').forEach((el) => el.addEventListener('click', async () => {
+          try { const r = await api.post('/api/weekly-poll/vote', { option_id: +el.dataset.opt }); render(r.poll); } catch (e) {}
+        }));
+      };
+      render(data.poll);
     }
 
     // 카테고리 알약

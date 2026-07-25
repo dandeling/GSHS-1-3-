@@ -191,6 +191,27 @@ CREATE TABLE IF NOT EXISTS reactions (
   PRIMARY KEY (post_id, user_id)
 );
 
+-- 주간 투표 (이주의 투표) — 관리자 운영, 홈 노출
+CREATE TABLE IF NOT EXISTS weekly_polls (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  question    TEXT NOT NULL,
+  active      INTEGER NOT NULL DEFAULT 1,
+  created_by  INTEGER,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS weekly_poll_options (
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  poll_id   INTEGER NOT NULL,
+  idx       INTEGER NOT NULL,
+  text      TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS weekly_poll_votes (
+  poll_id   INTEGER NOT NULL,
+  user_id   INTEGER NOT NULL,
+  option_id INTEGER NOT NULL,
+  PRIMARY KEY (poll_id, user_id)
+);
+
 -- 이메일 인증코드 (register / reset)
 CREATE TABLE IF NOT EXISTS email_codes (
   email       TEXT NOT NULL,

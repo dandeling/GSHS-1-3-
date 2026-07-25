@@ -19,6 +19,16 @@
       <label>📅 D-day 관리</label>
       <div class="row"><input id="ddayTitle" class="grow" placeholder="예: 중간고사" style="flex:2"><input id="ddayDate" type="date" style="flex:1"><button id="ddayAdd" class="btn-sm">추가</button></div>
       <div id="ddayList" style="margin-top:10px"></div>
+      <hr />
+      <label>🗳️ 이주의 투표</label>
+      <div id="wpCurrent" class="muted" style="margin-bottom:8px"></div>
+      <input id="wpQ" placeholder="투표 질문 (예: 이번 주 급식 뭐가 젤 좋아?)" maxlength="100" />
+      <div id="wpOpts" style="margin-top:8px"></div>
+      <div class="row" style="margin-top:6px">
+        <button id="wpAddOpt" type="button" class="btn-sm btn-ghost">+ 선택지</button>
+        <button id="wpStart" class="btn-sm">투표 시작</button>
+        <button id="wpClose" class="btn-sm btn-danger">현재 투표 종료</button>
+      </div>
     </div>
     <div class="card">
       <h2>회원 관리</h2>
@@ -71,6 +81,26 @@
       catch (e) { showMsg(msg, e.message); }
     });
     loadDdays();
+
+    // 이주의 투표
+    const wpOpts = document.getElementById('wpOpts');
+    const addWpOpt = (v='') => { const d = document.createElement('div'); d.className='poll-add-opt'; d.innerHTML = `<input class="grow wp-o" placeholder="선택지" maxlength="60" value="${v}"><button type="button" class="btn-ghost btn-sm rm">✕</button>`; d.querySelector('.rm').addEventListener('click',()=>d.remove()); wpOpts.appendChild(d); };
+    addWpOpt(); addWpOpt();
+    document.getElementById('wpAddOpt').addEventListener('click', () => { if (wpOpts.children.length < 8) addWpOpt(); });
+    async function loadWp() {
+      try { const d = await api.get('/api/weekly-poll'); document.getElementById('wpCurrent').textContent = d.poll ? `진행 중: "${d.poll.question}" (총 ${d.poll.total}표)` : '진행 중인 투표 없음'; } catch {}
+    }
+    document.getElementById('wpStart').addEventListener('click', async () => {
+      const question = document.getElementById('wpQ').value.trim();
+      const options = [...document.querySelectorAll('.wp-o')].map((i)=>i.value.trim()).filter(Boolean);
+      try { await api.post('/api/weekly-poll', { question, options }); showMsg(msg, '이주의 투표를 시작했어요!', true); document.getElementById('wpQ').value=''; loadWp(); }
+      catch (e) { showMsg(msg, e.message); }
+    });
+    document.getElementById('wpClose').addEventListener('click', async () => {
+      if (!confirm('현재 투표를 종료할까요?')) return;
+      try { await api.post('/api/weekly-poll/close'); showMsg(msg, '투표를 종료했어요.', true); loadWp(); } catch (e) { showMsg(msg, e.message); }
+    });
+    loadWp();
 
     async function load() {
       const d = await api.get('/api/admin/users' + (filter ? '?status=' + filter : ''));
