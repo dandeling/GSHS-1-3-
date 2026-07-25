@@ -1,4 +1,5 @@
 import express from 'express';
+import bcrypt from 'bcryptjs';
 import db from '../db.js';
 import { requireAdmin } from '../middleware.js';
 
@@ -17,7 +18,7 @@ router.get('/users', requireAdmin, (req, res) => {
     id: u.id, email: u.email, username: u.username, realname: u.realname,
     grade: u.grade, student_id: u.student_id, role: u.role,
     status: u.status, demerit: u.demerit, suspended_until: u.suspended_until,
-    created_at: u.created_at,
+    point: u.point || 0, created_at: u.created_at,
   }));
   res.json({ users });
 });
@@ -74,6 +75,15 @@ router.post('/users/:id/kick', requireAdmin, (req, res) => {
 router.post('/users/:id/reset-demerit', requireAdmin, (req, res) => {
   if (!guard(req, res)) return;
   db.prepare('UPDATE users SET demerit=0 WHERE id=?').run(req.params.id);
+  res.json({ ok: true });
+});
+
+// 비밀번호 초기화 (관리자가 임시 비번 지정)
+router.post('/users/:id/reset-password', requireAdmin, (req, res) => {
+  if (!guard(req, res)) return;
+  const pw = String(req.body?.password || '').trim();
+  if (pw.length < 6) return res.status(400).json({ error: '임시 비밀번호는 6자 이상으로 지정하세요.' });
+  db.prepare('UPDATE users SET password=? WHERE id=?').run(bcrypt.hashSync(pw, 10), req.params.id);
   res.json({ ok: true });
 });
 

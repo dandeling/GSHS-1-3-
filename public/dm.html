@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>쪽지 · 1-3반 커뮤니티</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <main>
+    <!-- 대화 목록 -->
+    <div class="card" id="listCard">
+      <h1>✉️ 쪽지</h1>
+      <div id="convs">불러오는 중…</div>
+    </div>
+    <!-- 대화 스레드 -->
+    <div class="card hidden" id="threadCard">
+      <div class="row"><a href="/dm.html" class="muted grow">← 대화목록</a><b id="otherName"></b></div>
+      <div class="chat-box" id="box" style="height:56vh;margin-top:10px"></div>
+      <div id="msg" class="hidden"></div>
+      <form id="form" style="margin-top:12px"><div class="row"><input id="input" class="grow" placeholder="쪽지 입력…" autocomplete="off" required><button type="submit">전송</button></div></form>
+    </div>
+  </main>
+  <script type="module">
+    import { renderNav, api, esc, fmt, qs, levelBadge } from '/js/common.js';
+    const me = await renderNav({ requireLogin: true });
+    const other = qs('u');
+
+    if (other) { showThread(other); } else { showList(); }
+
+    async function showList() {
+      document.getElementById('threadCard').classList.add('hidden');
+      document.getElementById('listCard').classList.remove('hidden');
+      const d = await api.get('/api/dm');
+      const box = document.getElementById('convs');
+      if (!d.conversations.length) { box.innerHTML = '<div class="empty">아직 주고받은 쪽지가 없어요.<br>프로필에서 “쪽지 보내기”로 시작해보세요.</div>'; return; }
+      box.innerHTML = d.conversations.map((c) => `
+        <div class="dm-conv" data-u="${esc(c.username)}">
+          <div class="av">${esc(c.username[0]||'?')}</div>
+          <div class="grow"><div class="row" style="gap:6px"><b>${esc(c.username)}</b>${levelBadge(c.point, c.role)}</div>
+            <div class="last">${esc(c.last||'')}</div></div>
+          ${c.unread>0?`<span class="dm-unread">${c.unread}</span>`:''}
+        </div>`).join('');
+      box.querySelectorAll('[data-u]').forEach((el) => el.addEventListener('click', () => location.href = '/dm.html?u=' + encodeURIComponent(el.dataset.u)));
+    }
+
+    let thread = null;
+    async function showThread(uname) {
+      document.getElementById('listCard').classList.add('hidden');
+      document.getElementById('threadCard').classList.remove('hidden');
+      try {
+        const d = await api.get('/api/dm/' + encodeURIComponent(uname));
+        thread = d;
+        document.getElementById('otherName').innerHTML = `${esc(d.other.username)} ${levelBadge(d.other.point, d.other.role)}`;
+        renderMsgs(d.messages, d.meId);
+      } catch (e) { document.getElementById('box').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+    }
+
+    function renderMsgs(msgs, meId) {
+      const box = document.getElementById('box');
+      box.innerHTML = msgs.length ? msgs.map((m) => {
+        const mine = m.sender_id === meId;
+        return `<div class="chat-msg ${mine?'mine':''}"><span class="time">${fmt(m.created_at)}</span>
+          <div><span class="chat-bubble">${esc(m.content)}</span></div></div>`;
+      }).join('') : '<div class="empty">첫 쪽지를 보내보세요.</div>';
+      box.scrollTop = box.scrollHeight;
+    }
+
+    document.getElementById('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const input = document.getElementById('input');
+      const text = input.value.trim(); if (!text || !other) return;
+      try { await api.post('/api/dm/' + encodeURIComponent(other), { content: text }); input.value=''; await showThread(other); }
+      catch (err) { const m = document.getElementById('msg'); m.className='msg err'; m.textContent=err.message; m.classList.remove('hidden'); }
+    });
+  </script>
+</body>
+</html>

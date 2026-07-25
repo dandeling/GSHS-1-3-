@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>문의사항 · 1-3반 커뮤니티</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <main>
+    <!-- 문의 작성 (일반 회원) -->
+    <div class="card" id="writeCard">
+      <h1>💌 문의사항</h1>
+      <p class="muted">궁금한 점·건의·신고를 관리자에게 남겨보세요. 답변이 등록되면 알림으로 알려드려요.</p>
+      <div id="msg" class="hidden"></div>
+      <label>제목</label>
+      <input id="title" maxlength="80" placeholder="문의 제목" />
+      <label>내용</label>
+      <textarea id="content" placeholder="문의 내용을 자세히 적어주세요"></textarea>
+      <div style="margin-top:12px"><button id="submit">문의 남기기</button></div>
+    </div>
+
+    <div class="section-title" id="listTitle">📋 문의 목록<span class="line"></span></div>
+    <div class="card"><div id="list">불러오는 중…</div></div>
+  </main>
+  <script type="module">
+    import { renderNav, api, esc, fmt, showMsg } from '/js/common.js';
+    const me = await renderNav({ requireLogin: true });
+    const isAdmin = me.role === 'admin';
+    if (isAdmin) {
+      document.getElementById('writeCard').classList.add('hidden');
+      document.getElementById('listTitle').innerHTML = '📋 전체 문의 (관리자)<span class="line"></span>';
+    }
+
+    document.getElementById('submit')?.addEventListener('click', async () => {
+      const title = document.getElementById('title').value.trim();
+      const content = document.getElementById('content').value.trim();
+      if (!title || !content) { showMsg(document.getElementById('msg'), '제목과 내용을 입력하세요.'); return; }
+      try {
+        await api.post('/api/inquiries', { title, content });
+        document.getElementById('title').value = ''; document.getElementById('content').value = '';
+        showMsg(document.getElementById('msg'), '문의가 접수됐어요! 답변을 기다려주세요.', true);
+        load();
+      } catch (e) { showMsg(document.getElementById('msg'), e.message); }
+    });
+
+    async function load() {
+      const d = await api.get('/api/inquiries');
+      const box = document.getElementById('list');
+      if (!d.inquiries.length) { box.innerHTML = '<div class="empty">문의 내역이 없어요.</div>'; return; }
+      box.innerHTML = d.inquiries.map((q) => {
+        const badge = q.status === 'answered'
+          ? '<span class="lv" style="background:color-mix(in srgb,var(--green) 15%,var(--card))">✅ 답변완료</span>'
+          : '<span class="lv" style="background:color-mix(in srgb,var(--warn) 18%,var(--card));color:var(--warn)">⏳ 답변대기</span>';
+        const who = isAdmin ? ` · <b>${esc(q.username)}</b>` : '';
+        const canDel = q.user_id === me.id || isAdmin;
+        return `<div class="comment">
+          <div class="row" style="gap:6px">${badge}<b class="grow">${esc(q.title)}</b>
+            ${canDel ? `<a href="#" class="muted" style="font-size:12px" data-del="${q.id}">삭제</a>` : ''}</div>
+          <div class="muted" style="font-size:12px">${fmt(q.created_at)}${who}</div>
+          <div style="white-space:pre-wrap;margin-top:6px">${esc(q.content)}</div>
+          ${q.answer ? `<div style="background:var(--accent);border-radius:10px;padding:12px;margin-top:10px">
+            <b style="color:var(--green)">👤 관리자 답변</b> <span class="muted" style="font-size:11px">${fmt(q.answered_at)}</span>
+            <div style="white-space:pre-wrap;margin-top:4px">${esc(q.answer)}</div></div>` : ''}
+          ${isAdmin && q.status !== 'answered' ? `<div class="row" style="margin-top:10px"><input class="grow ans-input" placeholder="답변 입력"><button class="btn-sm ans-send" data-id="${q.id}">답변</button></div>` : ''}
+        </div>`;
+      }).join('');
+
+      box.querySelectorAll('[data-del]').forEach((a) => a.addEventListener('click', async (e) => {
+        e.preventDefault(); if (!confirm('삭제할까요?')) return;
+        await api.del('/api/inquiries/' + a.dataset.del); load();
+      }));
+      box.querySelectorAll('.ans-send').forEach((b) => b.addEventListener('click', async () => {
+        const input = b.previousElementSibling;
+        const answer = input.value.trim(); if (!answer) return;
+        try { await api.post(`/api/inquiries/${b.dataset.id}/answer`, { answer }); load(); }
+        catch (e) { alert(e.message); }
+      }));
+    }
+    load();
+  </script>
+</body>
+</html>

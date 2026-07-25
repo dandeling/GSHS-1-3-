@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>프로필 · 1-3반 커뮤니티</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <main>
+    <div class="card" id="head">불러오는 중…</div>
+
+    <!-- 계정 설정 (내 프로필에서만) -->
+    <div class="card hidden" id="pwCard">
+      <h2>⚙️ 계정 설정</h2>
+      <div id="pwMsg" class="hidden"></div>
+      <label>별명 (로그인 아이디)</label>
+      <div class="row"><input id="newName" class="grow" maxlength="20" /><button id="nameChange" class="btn-sm">별명 변경</button></div>
+      <label>실명</label>
+      <div class="row"><input id="newReal" class="grow" maxlength="20" /><button id="realChange" class="btn-sm">실명 변경</button></div>
+      <label>이메일 <span class="muted" id="emailHint"></span></label>
+      <div class="row"><input id="newEmail" class="grow" /><button id="emailChange" class="btn-sm">이메일 변경</button></div>
+      <hr />
+      <label>현재 비밀번호</label>
+      <input id="curPw" type="password" autocomplete="current-password" />
+      <label>새 비밀번호 <span class="muted">(6자 이상)</span></label>
+      <input id="newPw" type="password" autocomplete="new-password" />
+      <div style="margin-top:12px"><button id="pwChange" class="btn-sm">비밀번호 변경</button></div>
+    </div>
+
+    <div class="section-title">📝 작성한 글<span class="line"></span></div>
+    <div class="card"><div id="posts"></div></div>
+  </main>
+  <script type="module">
+    import { renderNav, api, esc, fmt, qs, getMeta, renderDcTable, levelBadge, levelOf, nextLevelInfo, showMsg } from '/js/common.js';
+    const me = await renderNav({ requireLogin: true });
+    const meta = await getMeta();
+    const uname = qs('u') || me.username;
+
+    // 업적 뱃지 계산 (통계 기반)
+    function badges(s, u) {
+      const b = [];
+      if (u.role === 'admin') b.push({ e:'👑', n:'운영자' });
+      if (s.postCount >= 1) b.push({ e:'🎉', n:'첫 글' });
+      if (s.postCount >= 10) b.push({ e:'✍️', n:'글 10개' });
+      if (s.postCount >= 50) b.push({ e:'📚', n:'글 50개' });
+      if (s.commentCount >= 30) b.push({ e:'💬', n:'댓글왕' });
+      if (s.likeReceived >= 10) b.push({ e:'🔥', n:'인기글' });
+      if (s.likeReceived >= 50) b.push({ e:'⭐', n:'인기왕' });
+      if (s.attendance >= 7) b.push({ e:'📅', n:'개근 7일' });
+      if (s.attendance >= 30) b.push({ e:'🏆', n:'개근 30일' });
+      if (u.point >= 200) b.push({ e:'💎', n:'정회원' });
+      return b;
+    }
+
+    try {
+      const d = await api.get('/api/users/' + encodeURIComponent(uname) + '/profile');
+      const u = d.user, s = d.stats;
+      const ni = nextLevelInfo(u.point);
+      const joined = new Date(u.created_at.replace(' ','T')+'Z');
+      document.getElementById('head').innerHTML = `
+        <div class="profile-head">
+          <div class="profile-avatar">${esc(u.username[0]||'?')}</div>
+          <div class="grow">
+            <div class="row" style="gap:8px"><h1 style="margin:0">${esc(u.username)}</h1>${levelBadge(u.point, u.role)}</div>
+            <div class="muted">가입 ${joined.getFullYear()}.${joined.getMonth()+1}.${joined.getDate()}
+              ${u.role==='admin'?'· 운영자':`· 활동점수 ${u.point}점 ${ni.next?`(다음 ${ni.next.emoji}${ni.next.name}까지 ${ni.remain}점)`:''}`}</div>
+          </div>
+        </div>
+        <div class="stat-grid">
+          <div class="stat-box"><div class="n">${s.postCount}</div><div class="l">작성글</div></div>
+          <div class="stat-box"><div class="n">${s.commentCount}</div><div class="l">댓글</div></div>
+          <div class="stat-box"><div class="n">${s.likeReceived}</div><div class="l">받은 추천</div></div>
+          <div class="stat-box"><div class="n">${s.attendance}</div><div class="l">출석일</div></div>
+        </div>
+        <div class="badges">${badges(s, u).map((b)=>`<span class="ach"><span class="e">${b.e}</span>${b.n}</span>`).join('') || '<span class="muted" style="font-size:12px">아직 획득한 뱃지가 없어요.</span>'}</div>
+        ${!d.isMe ? `<button id="dmBtn" style="margin-top:14px">✉️ 쪽지 보내기</button>` : ''}`;
+
+      if (!d.isMe) document.getElementById('dmBtn').addEventListener('click', () => location.href = '/dm.html?u=' + encodeURIComponent(u.username));
+
+      const tagName = (c) => { const t = meta.tags.find((x)=>x.code===c); return t?`${t.emoji} ${t.name}`:''; };
+      const subName = (c) => { const x = meta.subjects.find((y)=>y.code===c); return x?x.name:''; };
+      document.getElementById('posts').innerHTML = d.posts.length ? renderDcTable(d.posts.map((p)=>({...p, author: u.username, author_point: u.point, author_role: u.role})), tagName, subName) : '<div class="empty">작성한 글이 없어요.</div>';
+
+      // 내 프로필이면 계정 설정 노출
+      if (d.isMe) {
+        document.getElementById('pwCard').classList.remove('hidden');
+        document.getElementById('newName').value = u.username;
+        document.getElementById('newReal').value = u.realname || '';
+        document.getElementById('newEmail').value = u.email || '';
+        document.getElementById('emailHint').textContent = u.role === 'admin' ? '(관리자는 일반 이메일도 가능)' : '(학교 이메일)';
+        const pm = () => document.getElementById('pwMsg');
+        document.getElementById('nameChange').addEventListener('click', async () => {
+          try {
+            const r = await api.post('/api/auth/change-username', { username: document.getElementById('newName').value.trim() });
+            showMsg(pm(), `별명이 "${r.username}"(으)로 변경됐어요. 다음 로그인부터 이 별명으로 로그인하세요.`, true);
+          } catch (e) { showMsg(pm(), e.message); }
+        });
+        document.getElementById('realChange').addEventListener('click', async () => {
+          try { const r = await api.post('/api/auth/change-realname', { realname: document.getElementById('newReal').value.trim() }); showMsg(pm(), `실명이 "${r.realname}"(으)로 변경됐어요.`, true); }
+          catch (e) { showMsg(pm(), e.message); }
+        });
+        document.getElementById('emailChange').addEventListener('click', async () => {
+          try { const r = await api.post('/api/auth/change-email', { email: document.getElementById('newEmail').value.trim() }); showMsg(pm(), `이메일이 "${r.email}"(으)로 변경됐어요.`, true); }
+          catch (e) { showMsg(pm(), e.message); }
+        });
+        document.getElementById('pwChange').addEventListener('click', async () => {
+          try {
+            const r = await api.post('/api/auth/change-password', {
+              currentPassword: document.getElementById('curPw').value,
+              newPassword: document.getElementById('newPw').value,
+            });
+            document.getElementById('curPw').value = ''; document.getElementById('newPw').value = '';
+            showMsg(document.getElementById('pwMsg'), r.message, true);
+          } catch (e) { showMsg(document.getElementById('pwMsg'), e.message); }
+        });
+      }
+    } catch (err) {
+      document.getElementById('head').innerHTML = `<div class="empty">${esc(err.message)}</div>`;
+    }
+  </script>
+</body>
+</html>

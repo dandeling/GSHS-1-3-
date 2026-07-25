@@ -3,41 +3,74 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>관리자 · GSHS 1-3</title>
+  <title>관리자 · 1-3반 커뮤니티</title>
   <link rel="stylesheet" href="/css/style.css" />
 </head>
 <body>
   <main>
     <div class="card">
       <h1>🛠️ 관리자 페이지</h1>
-      <div class="tabs" id="filterTabs">
-        <a href="#" data-f="" class="active">전체</a>
-        <a href="#" data-f="pending">승인대기</a>
-        <a href="#" data-f="active">활동중</a>
-        <a href="#" data-f="suspended">정지</a>
-        <a href="#" data-f="rejected">거절</a>
-        <a href="#" data-f="kicked">강퇴</a>
-      </div>
+      <!-- 오늘의 급식 관리 -->
+      <label>🍽️ 오늘의 급식</label>
+      <textarea id="mealInput" style="min-height:90px" placeholder="오늘 급식 메뉴를 입력하세요 (비우고 저장하면 삭제)"></textarea>
+      <div class="row" style="margin-top:8px"><button id="mealSave" class="btn-sm">급식 저장</button><span id="mealMsg" class="muted"></span></div>
+      <p class="muted" style="margin-top:6px">비워두면 NEIS(교육청) 급식이 자동 표시됩니다. 직접 입력하면 그 내용이 우선돼요.</p>
+      <hr />
+      <label>📅 D-day 관리</label>
+      <div class="row"><input id="ddayTitle" class="grow" placeholder="예: 중간고사" style="flex:2"><input id="ddayDate" type="date" style="flex:1"><button id="ddayAdd" class="btn-sm">추가</button></div>
+      <div id="ddayList" style="margin-top:10px"></div>
     </div>
     <div class="card">
+      <h2>회원 관리</h2>
+      <div class="pills" id="filterTabs">
+        <span class="pill active" data-f="">전체</span>
+        <span class="pill" data-f="pending">승인대기</span>
+        <span class="pill" data-f="active">활동중</span>
+        <span class="pill" data-f="suspended">정지</span>
+        <span class="pill" data-f="rejected">거절</span>
+        <span class="pill" data-f="kicked">강퇴</span>
+      </div>
       <div id="msg" class="hidden"></div>
       <div class="tbl-scroll">
         <table>
-          <thead>
-            <tr><th>별명</th><th>실명</th><th>학번</th><th>이메일</th><th class="center">벌점</th><th>상태</th><th style="min-width:260px">관리</th></tr>
-          </thead>
+          <thead><tr><th>별명</th><th>실명</th><th>학번</th><th>이메일</th><th class="center">벌점</th><th>상태</th><th style="min-width:260px">관리</th></tr></thead>
           <tbody id="list"></tbody>
         </table>
       </div>
     </div>
   </main>
   <script type="module">
-    import { renderNav, api, esc, showMsg } from '/js/common.js';
+    import { renderNav, api, esc, showMsg, levelBadge } from '/js/common.js';
     await renderNav({ requireLogin: true, requireAdmin: true });
     const msg = document.getElementById('msg');
     let filter = '';
-
     const STATUS_KO = { pending: '승인대기', active: '활동중', suspended: '정지', rejected: '거절', kicked: '강퇴' };
+
+    // 급식
+    try { const h = await api.get('/api/home'); if (h.meal) document.getElementById('mealInput').value = h.meal.content; } catch {}
+    document.getElementById('mealSave').addEventListener('click', async () => {
+      try { await api.post('/api/home/meal', { content: document.getElementById('mealInput').value }); document.getElementById('mealMsg').textContent = '저장됨 ✓'; }
+      catch (e) { document.getElementById('mealMsg').textContent = e.message; }
+    });
+
+    // D-day
+    async function loadDdays() {
+      const d = await api.get('/api/home/ddays');
+      document.getElementById('ddayList').innerHTML = d.ddays.length
+        ? d.ddays.map((x) => `<div class="row" style="justify-content:space-between;border-bottom:1px solid var(--line);padding:6px 0">
+            <span><b>${esc(x.title)}</b> <span class="muted">${x.target_date} · ${x.dleft<0?'지남':(x.dleft===0?'D-DAY':'D-'+x.dleft)}</span></span>
+            <button class="btn-sm btn-danger" data-dd="${x.id}">삭제</button></div>`).join('')
+        : '<span class="muted">등록된 D-day가 없어요.</span>';
+      document.querySelectorAll('[data-dd]').forEach((b) => b.addEventListener('click', async () => { await api.del('/api/home/ddays/' + b.dataset.dd); loadDdays(); }));
+    }
+    document.getElementById('ddayAdd').addEventListener('click', async () => {
+      const title = document.getElementById('ddayTitle').value.trim();
+      const date = document.getElementById('ddayDate').value;
+      if (!title || !date) return;
+      try { await api.post('/api/home/ddays', { title, target_date: date }); document.getElementById('ddayTitle').value=''; loadDdays(); }
+      catch (e) { showMsg(msg, e.message); }
+    });
+    loadDdays();
 
     async function load() {
       const d = await api.get('/api/admin/users' + (filter ? '?status=' + filter : ''));
@@ -51,23 +84,21 @@
           if (u.status === 'active') actions += `<button class="btn-sm btn-ghost" data-act="suspend" data-id="${u.id}">정지</button> `;
           if (u.status === 'suspended' || u.status === 'kicked' || u.status === 'rejected') actions += `<button class="btn-sm" data-act="unsuspend" data-id="${u.id}">활동중으로</button> `;
           if (u.status !== 'kicked') actions += `<button class="btn-sm btn-danger" data-act="kick" data-id="${u.id}">강퇴</button> `;
-          actions += `<button class="btn-sm btn-ghost" data-act="reset-demerit" data-id="${u.id}">벌점초기화</button>`;
-        } else { actions = '<span class="muted">—</span>'; }
+          actions += `<button class="btn-sm btn-ghost" data-act="reset-demerit" data-id="${u.id}">벌점초기화</button> `;
+          actions += `<button class="btn-sm btn-ghost" data-act="reset-password" data-id="${u.id}">비번초기화</button>`;
+        } else actions = '<span class="muted">—</span>';
         return `<tr>
-          <td>${esc(u.username)} ${isAdmin ? '<span class="badge admin">관리자</span>' : ''}</td>
-          <td>${esc(u.realname)}</td>
-          <td class="nowrap">${u.grade}기 ${esc(u.student_id)}</td>
+          <td>${esc(u.username)}<br>${levelBadge(u.point, u.role)}</td>
+          <td>${esc(u.realname)}</td><td class="nowrap">${u.grade}기 ${esc(u.student_id)}</td>
           <td class="muted" style="font-size:12px">${esc(u.email)}</td>
           <td class="center">${u.demerit >= 3 ? `<b style="color:var(--danger)">${u.demerit}</b>` : u.demerit}</td>
-          <td class="nowrap">${STATUS_KO[u.status] || u.status}</td>
-          <td>${actions}</td>
+          <td class="nowrap">${STATUS_KO[u.status] || u.status}</td><td>${actions}</td>
         </tr>`;
       }).join('');
-
       list.querySelectorAll('button[data-act]').forEach((b) => b.addEventListener('click', async () => {
-        const act = b.dataset.act, id = b.dataset.id;
-        let body;
+        const act = b.dataset.act, id = b.dataset.id; let body;
         if (act === 'suspend') { const days = prompt('정지 일수:', '1'); if (!days) return; body = { days: parseInt(days, 10) }; }
+        if (act === 'reset-password') { const pw = prompt('임시 비밀번호(6자 이상):'); if (!pw) return; body = { password: pw }; }
         if (act === 'kick' && !confirm('정말 강퇴할까요?')) return;
         if (act === 'reject' && !confirm('가입을 거절할까요?')) return;
         try { await api.post(`/api/admin/users/${id}/${act}`, body); showMsg(msg, '처리되었습니다.', true); await load(); }
@@ -75,14 +106,10 @@
       }));
     }
 
-    document.querySelectorAll('#filterTabs a').forEach((a) => a.addEventListener('click', (e) => {
-      e.preventDefault();
-      document.querySelectorAll('#filterTabs a').forEach((x) => x.classList.remove('active'));
-      a.classList.add('active');
-      filter = a.dataset.f;
-      load();
+    document.querySelectorAll('#filterTabs .pill').forEach((a) => a.addEventListener('click', () => {
+      document.querySelectorAll('#filterTabs .pill').forEach((x) => x.classList.remove('active'));
+      a.classList.add('active'); filter = a.dataset.f; load();
     }));
-
     await load();
   </script>
 </body>
