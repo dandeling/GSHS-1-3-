@@ -6,13 +6,14 @@ import { requireAdmin } from '../middleware.js';
 const router = express.Router();
 
 // 회원 목록 (실명·학번·이메일·벌점 포함) — 관리자만
+// 강퇴·거절된 회원은 목록에서 제외(익명화 처리됨)
 router.get('/users', requireAdmin, (req, res) => {
   const status = req.query.status;
   let rows;
-  if (status) {
+  if (status && status !== 'kicked' && status !== 'rejected') {
     rows = db.prepare('SELECT * FROM users WHERE status=? ORDER BY id DESC').all(status);
   } else {
-    rows = db.prepare('SELECT * FROM users ORDER BY id DESC').all();
+    rows = db.prepare("SELECT * FROM users WHERE status NOT IN ('kicked','rejected') ORDER BY id DESC").all();
   }
   const users = rows.map((u) => ({
     id: u.id, email: u.email, username: u.username, realname: u.realname,
@@ -25,6 +26,11 @@ router.get('/users', requireAdmin, (req, res) => {
 
 function setStatus(id, status, suspendedUntil = null) {
   db.prepare('UPDATE users SET status=?, suspended_until=? WHERE id=?').run(status, suspendedUntil, id);
+}
+
+// 익명화: 별명·실명 리셋 (글은 익명 이름으로 보존, 이메일은 유지해 재가입/회피 방지)
+function anonymize(id, label) {
+  db.prepare('UPDATE users SET username=?, realname=? WHERE id=?').run(`${label}#${id}`, '(삭제됨)', id);
 }
 
 function guard(req, res) {
@@ -41,10 +47,11 @@ router.post('/users/:id/approve', requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
-// 거절
+// 거절 (익명화 + 목록에서 제거)
 router.post('/users/:id/reject', requireAdmin, (req, res) => {
   if (!guard(req, res)) return;
   setStatus(req.params.id, 'rejected');
+  anonymize(req.params.id, '거절회원');
   res.json({ ok: true });
 });
 
@@ -64,10 +71,11 @@ router.post('/users/:id/unsuspend', requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
-// 강퇴
+// 강퇴 (익명화 + 목록에서 제거)
 router.post('/users/:id/kick', requireAdmin, (req, res) => {
   if (!guard(req, res)) return;
   setStatus(req.params.id, 'kicked');
+  anonymize(req.params.id, '강퇴회원');
   res.json({ ok: true });
 });
 

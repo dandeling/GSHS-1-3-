@@ -46,11 +46,13 @@ router.get('/:username/profile', requireAuth, (req, res) => {
   `).all(u.id);
 
   const isMe = u.id === req.user.id;
+  const isAdmin = req.user.role === 'admin';
   const userOut = { username: u.username, role: u.role, point: u.point, created_at: u.created_at };
-  if (isMe) {
-    // 본인에게만 이메일·실명 노출 (계정 설정용)
+  if (isMe || isAdmin) {
+    // 본인·관리자에게 실명 노출 (관리자는 프로필에서 실명 확인)
     const full = db.prepare('SELECT email, realname FROM users WHERE id=?').get(u.id);
-    userOut.email = full.email; userOut.realname = full.realname;
+    userOut.realname = full.realname;
+    if (isMe) userOut.email = full.email; // 이메일은 본인에게만
   }
   res.json({ user: userOut, stats: { postCount, commentCount, likeReceived, attendance }, posts, isMe });
 });
