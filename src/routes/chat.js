@@ -82,7 +82,9 @@ router.get('/', requireAuth, async (req, res) => {
   if (!(await canAccess(room, req.user))) return res.status(403).json({ error: '비밀방입니다. 입장코드가 필요해요.', locked: true });
   const since = parseInt(req.query.since || '0', 10);
   const rows = await db.prepare(`
-    SELECT c.id, c.content, c.created_at, c.author_id, u.username AS author, u.point AS author_point, u.role AS author_role
+    SELECT c.id, c.content, c.created_at, c.author_id,
+           CASE WHEN u.status IN ('kicked','rejected','withdrawn') THEN '삭제된 사람' ELSE u.username END AS author,
+           u.point AS author_point, u.role AS author_role
     FROM chats c JOIN users u ON u.id = c.author_id
     WHERE c.deleted_at IS NULL AND c.room_id = ? AND c.id > ?
     ORDER BY c.id ASC LIMIT 200

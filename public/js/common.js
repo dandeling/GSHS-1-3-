@@ -100,6 +100,7 @@ export async function renderNav(opts = {}) {
     <a class="sb-link" href="/board.html?board=resource"><span class="e">📚</span> 자료공유</a>
     <a class="sb-link" href="/chat.html"><span class="e">⚡</span> 반 채팅방</a>
     <a class="sb-link" href="/calendar.html"><span class="e">📅</span> 캘린더</a>
+    <a class="sb-link" href="/timetable.html"><span class="e">🕐</span> 시간표</a>
     ${me && me.role === 'admin' ? '<a class="sb-link" href="/admin.html"><span class="e">🛠️</span> 관리자 페이지</a>' : ''}
     <div class="sb-div"></div>
     <a class="sb-link" href="/info.html?p=about"><span class="e">🏫</span> 학교 소개</a>
@@ -124,6 +125,7 @@ export async function renderNav(opts = {}) {
         <div class="cm-title" style="margin-top:12px">🏫 소통</div>
         <a class="cm-link" href="/chat.html">⚡ 반 채팅방</a>
         <a class="cm-link" href="/calendar.html">📅 캘린더</a>
+        <a class="cm-link" href="/timetable.html">🕐 시간표</a>
         ${me.role === 'admin' ? '<a class="cm-link" href="/admin.html">🛠️ 관리자</a>' : ''}
       </div>
       <div class="cm-box">

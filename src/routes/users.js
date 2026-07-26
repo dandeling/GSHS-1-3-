@@ -11,18 +11,18 @@ router.get('/ranking', requireAuth, async (req, res) => {
   if (by === 'likes') {
     rows = await db.prepare(`SELECT u.username, u.point, u.role,
       (SELECT COUNT(*) FROM likes l JOIN posts p ON p.id=l.post_id WHERE p.author_id=u.id) AS score
-      FROM users u WHERE u.role!='admin' ORDER BY score DESC, u.point DESC LIMIT 20`).all();
+      FROM users u WHERE u.role!='admin' AND u.status NOT IN ('kicked','rejected','withdrawn') ORDER BY score DESC, u.point DESC LIMIT 20`).all();
   } else if (by === 'attendance') {
     rows = await db.prepare(`SELECT u.username, u.point, u.role,
       (SELECT COUNT(*) FROM attendance a WHERE a.user_id=u.id) AS score
-      FROM users u WHERE u.role!='admin' ORDER BY score DESC, u.point DESC LIMIT 20`).all();
+      FROM users u WHERE u.role!='admin' AND u.status NOT IN ('kicked','rejected','withdrawn') ORDER BY score DESC, u.point DESC LIMIT 20`).all();
   } else if (by === 'posts') {
     rows = await db.prepare(`SELECT u.username, u.point, u.role,
       (SELECT COUNT(*) FROM posts p WHERE p.author_id=u.id AND p.deleted_at IS NULL) AS score
-      FROM users u WHERE u.role!='admin' ORDER BY score DESC, u.point DESC LIMIT 20`).all();
+      FROM users u WHERE u.role!='admin' AND u.status NOT IN ('kicked','rejected','withdrawn') ORDER BY score DESC, u.point DESC LIMIT 20`).all();
   } else {
     rows = await db.prepare(`SELECT u.username, u.point, u.role, u.point AS score
-      FROM users u WHERE u.role!='admin' ORDER BY u.point DESC LIMIT 20`).all();
+      FROM users u WHERE u.role!='admin' AND u.status NOT IN ('kicked','rejected','withdrawn') ORDER BY u.point DESC LIMIT 20`).all();
   }
   res.json({ by, ranking: rows });
 });

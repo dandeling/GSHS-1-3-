@@ -1,6 +1,6 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
-import db from '../db.js';
+import db, { anonymizeUser } from '../db.js';
 import { SCHOOL_EMAIL_REGEX } from '../constants.js';
 import { issueSession, clearSession, loadUser, requireAuth } from '../middleware.js';
 import { mailEnabled, sendCodeMail } from '../mailer.js';
@@ -74,6 +74,13 @@ router.post('/register', async (req, res) => {
   const dupName = await db.prepare('SELECT id FROM users WHERE username=?').get(username);
   if (dupName) return res.status(409).json({ error: '이미 사용 중인 별명입니다.' });
 
+  // 탈퇴/추방 후 1주일 재가입 제한 (관리자가 해제하면 즉시 가능)
+  const block = await db.prepare("SELECT until FROM rejoin_blocks WHERE email=? AND until > datetime('now')").get(email);
+  if (block) {
+    const until = new Date(block.until.replace(' ', 'T') + 'Z');
+    return res.status(403).json({ error: `재가입 제한 중입니다. ${until.getMonth()+1}월 ${until.getDate()}일 이후 가능하며, 급하면 관리자에게 승인 요청하세요.` });
+  }
+
   if (mailEnabled() && !(await codeVerified(email, 'register'))) {
     return res.status(400).json({ error: '이메일 인증을 먼저 완료해주세요.' });
   }
@@ -110,6 +117,15 @@ router.post('/login', async (req, res) => {
 
 // 로그아웃
 router.post('/logout', (req, res) => { clearSession(res); res.json({ ok: true }); });
+
+// 회원 탈퇴 (본인) — 익명화 + 1주일 재가입 제한, 글은 '삭제된 사람'으로 보존
+router.post('/withdraw', requireAuth, async (req, res) => {
+  if (req.user.role === 'admin') return res.status(400).json({ error: '관리자 계정은 탈퇴할 수 없어요.' });
+  await db.prepare("UPDATE users SET status='withdrawn' WHERE id=?").run(req.user.id);
+  await anonymizeUser(req.user.id, '탈퇴회원');
+  clearSession(res);
+  res.json({ ok: true, message: '탈퇴가 완료됐어요. 그동안 이용해주셔서 감사합니다.' });
+});
 
 // 내 정보
 router.get('/me', async (req, res) => {

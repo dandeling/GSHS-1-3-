@@ -1,6 +1,6 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
-import db from '../db.js';
+import db, { anonymizeUser } from '../db.js';
 import { requireAdmin } from '../middleware.js';
 
 const router = express.Router();
@@ -10,10 +10,11 @@ const router = express.Router();
 router.get('/users', requireAdmin, async (req, res) => {
   const status = req.query.status;
   let rows;
-  if (status && status !== 'kicked' && status !== 'rejected') {
+  const removed = ['kicked', 'rejected', 'withdrawn'];
+  if (status && !removed.includes(status)) {
     rows = await db.prepare('SELECT * FROM users WHERE status=? ORDER BY id DESC').all(status);
   } else {
-    rows = await db.prepare("SELECT * FROM users WHERE status NOT IN ('kicked','rejected') ORDER BY id DESC").all();
+    rows = await db.prepare("SELECT * FROM users WHERE status NOT IN ('kicked','rejected','withdrawn') ORDER BY id DESC").all();
   }
   const users = rows.map((u) => ({
     id: u.id, email: u.email, username: u.username, realname: u.realname,
@@ -28,12 +29,7 @@ async function setStatus(id, status, suspendedUntil = null) {
   await db.prepare('UPDATE users SET status=?, suspended_until=? WHERE id=?').run(status, suspendedUntil, id);
 }
 
-// 익명화: 별명·실명·이메일을 리셋해 원래 값을 다시 쓸 수 있게 함
-// (글·댓글은 익명 이름으로 보존, 원래 이메일/별명은 재가입에 재사용 가능)
-async function anonymize(id, label) {
-  await db.prepare('UPDATE users SET username=?, realname=?, email=? WHERE id=?')
-    .run(`${label}#${id}`, '(삭제됨)', `removed+${id}@removed.local`, id);
-}
+const anonymize = anonymizeUser;
 
 async function guard(req, res) {
   const target = await db.prepare('SELECT * FROM users WHERE id=?').get(req.params.id);
@@ -85,6 +81,20 @@ router.post('/users/:id/kick', requireAdmin, async (req, res) => {
 router.post('/users/:id/reset-demerit', requireAdmin, async (req, res) => {
   if (!(await guard(req, res))) return;
   await db.prepare('UPDATE users SET demerit=0 WHERE id=?').run(req.params.id);
+  res.json({ ok: true });
+});
+
+// 재가입 제한 목록 (1주일 제한 중인 이메일)
+router.get('/rejoin-blocks', requireAdmin, async (req, res) => {
+  const rows = await db.prepare("SELECT email, until, created_at FROM rejoin_blocks WHERE until > datetime('now') ORDER BY until ASC").all();
+  res.json({ blocks: rows });
+});
+
+// 재가입 즉시 허용 (제한 해제) — 관리자 허락
+router.post('/rejoin-allow', requireAdmin, async (req, res) => {
+  const email = String(req.body?.email || '').trim();
+  if (!email) return res.status(400).json({ error: '이메일을 입력하세요.' });
+  await db.prepare('DELETE FROM rejoin_blocks WHERE email=?').run(email);
   res.json({ ok: true });
 });
 

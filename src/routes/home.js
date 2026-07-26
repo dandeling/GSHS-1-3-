@@ -36,7 +36,9 @@ router.get('/', requireAuth, async (req, res) => {
   `).all();
 
   const popular = await db.prepare(`
-    SELECT p.id, p.board, p.tag, p.title, u.username AS author, u.point AS author_point, u.role AS author_role, p.views,
+    SELECT p.id, p.board, p.tag, p.title,
+           CASE WHEN u.status IN ('kicked','rejected','withdrawn') THEN '삭제된 사람' ELSE u.username END AS author,
+           u.point AS author_point, u.role AS author_role, p.views,
            (SELECT COUNT(*) FROM likes l WHERE l.post_id=p.id) AS like_count,
            (SELECT COUNT(*) FROM comments c WHERE c.post_id=p.id AND c.deleted_at IS NULL) AS comment_count
     FROM posts p JOIN users u ON u.id=p.author_id
@@ -53,6 +55,7 @@ router.get('/', requireAuth, async (req, res) => {
              WHERE p2.author_id=u.id AND strftime('%Y-%m', p2.created_at)=strftime('%Y-%m','now')) AS like_count
     FROM posts p JOIN users u ON u.id=p.author_id
     WHERE p.deleted_at IS NULL AND strftime('%Y-%m', p.created_at)=strftime('%Y-%m','now')
+      AND u.status NOT IN ('kicked','rejected','withdrawn')
     GROUP BY u.id ORDER BY like_count DESC, post_count DESC LIMIT 3
   `).all();
 

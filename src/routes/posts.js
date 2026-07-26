@@ -6,6 +6,8 @@ import { BOARDS, SUBJECT_CODES, CATEGORY_CODES, TAG_CODES } from '../constants.j
 
 const REACTIONS = ['👍', '😂', '😮', '😢', '🔥', '👏'];
 const MAX_ATTACH = 4_500_000; // data URL 문자열 최대 길이(약 3MB 파일)
+// 탈퇴/추방 회원은 '삭제된 사람'으로 표시
+const AUTHOR = `CASE WHEN u.status IN ('kicked','rejected','withdrawn') THEN '삭제된 사람' ELSE u.username END AS author`;
 
 const router = express.Router();
 const PAGE_SIZE = 20;
@@ -58,7 +60,7 @@ router.get('/', requireAuth, async (req, res) => {
   const rows = await db.prepare(`
     SELECT p.id, p.board, p.tag, p.subject, p.category, p.title, p.views, p.created_at, p.updated_at,
            (p.attachment IS NOT NULL) AS has_attach,
-           u.username AS author, u.point AS author_point, u.role AS author_role,
+           ${AUTHOR}, u.point AS author_point, u.role AS author_role,
            (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id AND c.deleted_at IS NULL) AS comment_count,
            (SELECT COUNT(*) FROM likes l WHERE l.post_id = p.id) AS like_count
     FROM posts p JOIN users u ON u.id = p.author_id
@@ -73,7 +75,7 @@ router.get('/', requireAuth, async (req, res) => {
 // 단건 조회 (조회수 +1) + 댓글 + 투표 + 반응
 router.get('/:id', requireAuth, async (req, res) => {
   const post = await db.prepare(`
-    SELECT p.*, u.username AS author, u.point AS author_point, u.role AS author_role
+    SELECT p.*, ${AUTHOR}, u.point AS author_point, u.role AS author_role
     FROM posts p JOIN users u ON u.id = p.author_id
     WHERE p.id = ? AND p.deleted_at IS NULL
   `).get(req.params.id);
@@ -83,7 +85,7 @@ router.get('/:id', requireAuth, async (req, res) => {
   post.views += 1;
 
   const comments = await db.prepare(`
-    SELECT c.id, c.content, c.created_at, c.author_id, c.parent_id, u.username AS author, u.point AS author_point, u.role AS author_role
+    SELECT c.id, c.content, c.created_at, c.author_id, c.parent_id, ${AUTHOR}, u.point AS author_point, u.role AS author_role
     FROM comments c JOIN users u ON u.id = c.author_id
     WHERE c.post_id = ? AND c.deleted_at IS NULL
     ORDER BY c.id ASC

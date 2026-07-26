@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>시간표 · 1-3반 커뮤니티</title>
+  <link rel="stylesheet" href="/css/style.css" />
+  <style>
+    .tt { width: 100%; border-collapse: collapse; }
+    .tt th, .tt td { border: 1px solid var(--line-2); padding: 6px; text-align: center; font-size: 13px; }
+    .tt th { background: var(--accent); color: var(--muted); font-weight: 700; }
+    .tt .pcol { background: var(--accent); color: var(--muted); font-weight: 700; width: 40px; }
+    .tt input { width: 100%; border: none; background: transparent; text-align: center; font-size: 13px; padding: 4px 2px; color: var(--text); }
+    .tt input:focus { outline: 2px solid var(--green); border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="card">
+      <div class="row"><h1 class="grow" style="margin:0">🕐 우리 반 시간표</h1>
+        <button id="saveBtn" class="btn-sm hidden">저장</button></div>
+      <p class="muted" id="hint"></p>
+      <div id="msg" class="hidden"></div>
+      <div class="tbl-scroll"><table class="tt" id="tt"></table></div>
+    </div>
+  </main>
+  <script type="module">
+    import { renderNav, api, esc, showMsg } from '/js/common.js';
+    const me = await renderNav({ requireLogin: true });
+    const d = await api.get('/api/timetable');
+    const isAdmin = d.isAdmin;
+    document.getElementById('hint').textContent = isAdmin ? '칸을 눌러 과목을 입력하고 저장하세요.' : '시간표는 관리자만 수정할 수 있어요.';
+    if (isAdmin) document.getElementById('saveBtn').classList.remove('hidden');
+
+    const tt = document.getElementById('tt');
+    let html = '<thead><tr><th class="pcol">교시</th>' + d.days.map((day) => `<th>${esc(day)}</th>`).join('') + '</tr></thead><tbody>';
+    for (let p = 1; p <= d.periods; p++) {
+      html += `<tr><td class="pcol">${p}</td>`;
+      for (let day = 0; day < d.days.length; day++) {
+        const v = d.grid[`${day}_${p}`] || '';
+        html += `<td>${isAdmin ? `<input data-day="${day}" data-period="${p}" value="${esc(v)}" maxlength="30" />` : esc(v)}</td>`;
+      }
+      html += '</tr>';
+    }
+    tt.innerHTML = html + '</tbody>';
+
+    document.getElementById('saveBtn')?.addEventListener('click', async () => {
+      const cells = [...tt.querySelectorAll('input')].map((i) => ({ day: +i.dataset.day, period: +i.dataset.period, subject: i.value.trim() }));
+      try { await api.post('/api/timetable', { cells }); showMsg(document.getElementById('msg'), '저장됐어요 ✓', true); }
+      catch (e) { showMsg(document.getElementById('msg'), e.message); }
+    });
+  </script>
+</body>
+</html>

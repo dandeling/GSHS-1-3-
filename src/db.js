@@ -114,6 +114,12 @@ CREATE TABLE IF NOT EXISTS inquiries (
   answer TEXT, status TEXT NOT NULL DEFAULT 'open', is_secret INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT (datetime('now')), answered_at TEXT
 );
+CREATE TABLE IF NOT EXISTS rejoin_blocks (
+  email TEXT PRIMARY KEY, until TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS timetable (
+  day INTEGER NOT NULL, period INTEGER NOT NULL, subject TEXT NOT NULL DEFAULT '', PRIMARY KEY (day, period)
+);
 CREATE INDEX IF NOT EXISTS idx_posts_board ON posts(board, subject, category);
 CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(post_id);
 CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_logs(entity_type, entity_id);
@@ -141,6 +147,16 @@ if (!(await db.prepare('SELECT id FROM users WHERE username=?').get('admin'))) {
   const cols = (await db.prepare('PRAGMA table_info(posts)').all()).map((c) => c.name);
   if (!cols.includes('attachment')) await db.prepare('ALTER TABLE posts ADD COLUMN attachment TEXT').run();
   if (!cols.includes('attachment_name')) await db.prepare('ALTER TABLE posts ADD COLUMN attachment_name TEXT').run();
+}
+
+// 회원 익명화: 별명·실명·이메일 리셋(글은 '삭제된 사람' 표시), 원래 이메일은 1주일 재가입 제한
+export async function anonymizeUser(id, label) {
+  const u = await db.prepare('SELECT email FROM users WHERE id=?').get(id);
+  if (u && u.email && !String(u.email).endsWith('@removed.local')) {
+    await db.prepare("INSERT INTO rejoin_blocks (email, until) VALUES (?, datetime('now','+7 days')) ON CONFLICT(email) DO UPDATE SET until=datetime('now','+7 days')").run(u.email);
+  }
+  await db.prepare('UPDATE users SET username=?, realname=?, email=? WHERE id=?')
+    .run(`${label}#${id}`, '(삭제됨)', `removed+${id}@removed.local`, id);
 }
 
 // 활동점수 증감 (0 미만 방지)

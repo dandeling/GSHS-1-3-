@@ -30,8 +30,12 @@
         <!-- 파일 첨부 (새 글만) -->
         <div id="fileField" class="hidden">
           <label>📎 파일 첨부 <span class="muted">(이미지·PDF 등 · 약 3MB 이하 · 선택)</span></label>
-          <input type="file" id="file" accept="image/*,.pdf,.hwp,.hwpx,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.zip" />
-          <div id="fileInfo" class="muted" style="font-size:12px;margin-top:4px"></div>
+          <div class="row">
+            <button type="button" id="attachBtn" class="btn-ghost btn-sm">📎 첨부하기</button>
+            <button type="button" id="attachClear" class="btn-ghost btn-sm hidden">✕ 첨부 취소</button>
+          </div>
+          <input type="file" id="file" accept="image/*,.pdf,.hwp,.hwpx,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.zip" class="hidden" />
+          <div id="fileInfo" class="muted" style="font-size:12px;margin-top:6px"></div>
         </div>
 
         <!-- 투표 첨부 (자유게시판, 새 글만) -->
@@ -75,17 +79,22 @@
       document.getElementById('form').classList.add('hidden');
     }
 
-    // 파일 첨부 (새 글 작성 시) — data URL로 읽어 전송
+    // 파일 첨부 (새 글 작성 시) — '첨부하기' 버튼 → 파일 선택 → data URL
     let attachData = null, attachName = null;
     if (!editId) {
       document.getElementById('fileField').classList.remove('hidden');
-      document.getElementById('file').addEventListener('change', (e) => {
-        const f = e.target.files[0]; const info = document.getElementById('fileInfo');
-        attachData = null; attachName = null;
+      const fileEl = document.getElementById('file');
+      const info = document.getElementById('fileInfo');
+      const clearBtn = document.getElementById('attachClear');
+      document.getElementById('attachBtn').addEventListener('click', () => fileEl.click());
+      clearBtn.addEventListener('click', () => { attachData = null; attachName = null; fileEl.value = ''; info.textContent = ''; clearBtn.classList.add('hidden'); });
+      fileEl.addEventListener('change', (e) => {
+        const f = e.target.files[0];
+        attachData = null; attachName = null; clearBtn.classList.add('hidden');
         if (!f) { info.textContent = ''; return; }
-        if (f.size > 3 * 1024 * 1024) { info.textContent = '⚠️ 파일이 너무 커요 (3MB 이하로).'; info.style.color = 'var(--danger)'; e.target.value = ''; return; }
+        if (f.size > 3 * 1024 * 1024) { info.textContent = '⚠️ 파일이 너무 커요 (3MB 이하로).'; info.style.color = 'var(--danger)'; fileEl.value = ''; return; }
         const reader = new FileReader();
-        reader.onload = () => { attachData = reader.result; attachName = f.name; info.textContent = `첨부됨: ${f.name} (${Math.round(f.size/1024)}KB)`; info.style.color = 'var(--green)'; };
+        reader.onload = () => { attachData = reader.result; attachName = f.name; info.textContent = `첨부됨: ${f.name} (${Math.round(f.size/1024)}KB)`; info.style.color = 'var(--green)'; clearBtn.classList.remove('hidden'); };
         reader.readAsDataURL(f);
       });
     }
