@@ -213,7 +213,7 @@ export function renderDcTable(posts, tagName, subjName) {
     const lvIcon = p.author_role === 'admin' ? '👑' : lv.emoji;
     return `<tr class="${p.board==='notice'?'is-notice':''}" onclick="location.href='/post.html?id=${p.id}'">
       <td class="c-no">${noCell}</td>
-      <td class="c-subj">${head}<span class="subj-title">${esc(p.title)}</span>${cmt}</td>
+      <td class="c-subj">${head}<span class="subj-title">${esc(p.title)}</span>${p.has_attach ? ' <span title="첨부파일">📎</span>' : ''}${cmt}</td>
       <td class="c-user"><span class="lv-dot" title="${p.author_role==='admin'?'운영자':lv.name}">${lvIcon}</span><span class="clickable-user" onclick="event.stopPropagation();location.href='/profile.html?u=${encodeURIComponent(p.author).replace(/'/g, '%27')}'">${esc(p.author)}</span></td>
       <td class="c-date">${fmt(p.created_at)}</td>
       <td class="c-num c-views">${p.views}</td>

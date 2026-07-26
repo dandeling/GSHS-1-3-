@@ -21,8 +21,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '8mb' })); // 첨부(base64) 여유
+app.use(express.urlencoded({ extended: true, limit: '8mb' }));
 app.use(cookieParser());
 
 // 메타 정보 (과목/분류/말머리 목록) — 프론트에서 사용

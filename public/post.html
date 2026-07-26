@@ -34,6 +34,17 @@
     const id = qs('id');
     let data;
 
+    // 첨부 렌더링: 이미지는 인라인, 그 외는 다운로드 링크
+    const attachHtml = (p) => {
+      if (!p.attachment) return '';
+      const name = esc(p.attachment_name || '첨부파일');
+      if (/^data:image\//.test(p.attachment)) {
+        return `<div style="margin-top:14px"><img src="${p.attachment}" alt="${name}" style="max-width:100%;border-radius:10px;border:1px solid var(--line)" />
+          <div style="margin-top:6px"><a href="${p.attachment}" download="${name}" class="btn btn-ghost btn-sm">📎 ${name} 다운로드</a></div></div>`;
+      }
+      return `<div style="margin-top:14px"><a href="${p.attachment}" download="${name}" class="btn btn-ghost btn-sm">📎 ${name} 다운로드</a></div>`;
+    };
+
     const tagLabel = (p) => {
       if (p.board === 'notice') return '<span class="tag-chip notice">📢 공지</span>';
       if (p.board === 'resource' && p.subject) { const s = meta.subjects.find((x)=>x.code===p.subject); return `<span class="tag-chip">${esc(s?s.name:'')}${p.category==='exam'?' · 시험':' · 수행'}</span>`; }
@@ -56,6 +67,7 @@
         <p class="muted">${levelBadge(p.author_point, p.author_role)} <b class="clickable-user" style="color:var(--text)" onclick="location.href='/profile.html?u=${encodeURIComponent(p.author).replace(/'/g,'%27')}'">${esc(p.author)}</b> · ${fmt(p.created_at)} ${p.updated_at ? '(수정됨)' : ''} · 조회 ${p.views}</p>
         <hr />
         <div style="white-space:pre-wrap;font-size:15.5px;min-height:40px">${esc(p.content)}</div>
+        ${attachHtml(p)}
         <div id="pollBox"></div>
         <div style="text-align:center;margin-top:22px">
           <button class="like-btn ${p.liked?'on':''}" id="likeBtn">❤ 좋아요 <span id="likeCount">${p.like_count}</span></button>
