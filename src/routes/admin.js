@@ -1,7 +1,7 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import db, { anonymizeUser, logAudit } from '../db.js';
-import { requireAdmin } from '../middleware.js';
+import { requireAdmin, addDemerit } from '../middleware.js';
 
 const router = express.Router();
 
@@ -96,6 +96,17 @@ router.post('/users/:id/kick', requireAdmin, async (req, res) => {
   await trace(t.id, `${t.username} 강퇴`, req.user.id);
   await anonymize(req.params.id, '강퇴회원');
   res.json({ ok: true });
+});
+
+// 벌점 즉시 부여 (+1). 3=1일정지 / 6=1주정지 / 9=강퇴(익명화) 자동 적용
+router.post('/users/:id/add-demerit', requireAdmin, async (req, res) => {
+  const t = await guard(req, res); if (!t) return;
+  const after = await addDemerit(t.id);
+  const STATUS_KO = { active: '활동중', suspended: '정지', kicked: '강퇴' };
+  await trace(t.id, `${t.username} 벌점 +1 (누적 ${after.demerit}점 · ${STATUS_KO[after.status] || after.status})`, req.user.id);
+  // 9점 도달로 강퇴되면 강퇴 버튼과 동일하게 익명화 + 목록에서 제거
+  if (after.status === 'kicked') await anonymize(t.id, '강퇴회원');
+  res.json({ ok: true, demerit: after.demerit, status: after.status });
 });
 
 // 벌점 초기화

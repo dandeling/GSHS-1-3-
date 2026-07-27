@@ -10,7 +10,7 @@
   <main>
     <div class="card">
       <h1>📋 전체 기록</h1>
-      <p class="muted">사이트에서 일어난 <b>모든 추가·수정·삭제</b>를 별명·실명·수정한 내용 순으로 볼 수 있어요. (3개월간 보관)</p>
+      <p class="muted">사이트에서 일어난 <b>모든 추가·수정·삭제</b>를 별명·실명·수정한 내용 순으로 볼 수 있어요. 각 줄을 <b>클릭하면 전체 내용</b>(삭제된 글 포함)을 볼 수 있어요. (3개월간 보관)</p>
       <div class="pills" id="filterTabs">
         <span class="pill active" data-f="">전체</span>
         <span class="pill" data-f="글">글·댓글</span>
@@ -33,6 +33,17 @@
     </div>
   </main>
 
+  <!-- 상세보기 모달 (삭제된 글 전체 내용까지) -->
+  <div class="audit-modal-bg hidden" id="modalBg">
+    <div class="audit-modal" id="modalBox">
+      <div class="row" style="align-items:flex-start">
+        <div class="grow" id="modalHead"></div>
+        <button class="icon-btn" id="modalClose" style="box-shadow:none">✕</button>
+      </div>
+      <div id="modalBody"></div>
+    </div>
+  </div>
+
   <script type="module">
     import { renderNav, api, esc, fmt } from '/js/common.js';
     await renderNav({ requireLogin: true, requireAdmin: true });
@@ -52,21 +63,28 @@
     };
     const ACTION = { create: { t: '추가', c: 'act-add' }, update: { t: '수정', c: 'act-edit' }, delete: { t: '삭제', c: 'act-del' } };
 
-    // snapshot(JSON 또는 원문) → 사람이 읽는 내용
-    function readable(l) {
-      const ent = ENTITY[l.entity_type] || { name: l.entity_type, icon: '•' };
-      let detail = '';
+    // snapshot(JSON 또는 원문) → { title, content, label } 전체 파싱
+    function parse(l) {
+      let title = '', content = '', label = '';
       try {
         const s = JSON.parse(l.snapshot);
-        if (s && typeof s === 'object') detail = s.label || s.title || s.content || '';
-        else detail = String(l.snapshot ?? '');
-      } catch { detail = String(l.snapshot ?? ''); }
+        if (s && typeof s === 'object') { title = s.title || ''; content = s.content || ''; label = s.label || ''; }
+        else content = String(l.snapshot ?? '');
+      } catch { content = String(l.snapshot ?? ''); }
+      return { title, content, label };
+    }
+
+    // 표에 보여줄 짧은 요약
+    function summary(l) {
+      const p = parse(l);
+      let detail = p.label || p.title || p.content || '';
       detail = detail.replace(/\s+/g, ' ').trim();
       if (detail.length > 80) detail = detail.slice(0, 80) + '…';
-      return { ent, detail };
+      return detail;
     }
 
     let page = 1, filter = '';
+    let current = [];      // 현재 화면에 표시 중인 로그 (모달 참조용)
     const body = document.getElementById('auditBody');
 
     async function load() {
@@ -74,23 +92,24 @@
       const d = await api.get('/api/admin/audit?page=' + page);
       let logs = d.logs;
       if (filter) logs = logs.filter((l) => (ENTITY[l.entity_type]?.group || '기타') === filter);
+      current = logs;
       if (!logs.length) {
         body.innerHTML = `<tr><td colspan="4" class="muted" style="padding:20px;text-align:center">기록이 없어요.</td></tr>`;
       } else {
-        body.innerHTML = logs.map((l) => {
-          const { ent, detail } = readable(l);
+        body.innerHTML = logs.map((l, i) => {
+          const ent = ENTITY[l.entity_type] || { name: l.entity_type, icon: '•' };
           const act = ACTION[l.action] || { t: l.action, c: '' };
           const nick = l.username ? esc(l.username) : '<span class="muted">시스템</span>';
           const real = l.realname ? esc(l.realname) : '<span class="muted">-</span>';
-          return `<tr>
+          return `<tr class="audit-row" data-idx="${i}">
             <td>${nick}</td>
             <td>${real}</td>
-            <td><span class="audit-badge ${act.c}">${ent.icon} ${ent.name} ${act.t}</span> ${esc(detail)}</td>
+            <td><span class="audit-badge ${act.c}">${ent.icon} ${ent.name} ${act.t}</span> ${esc(summary(l))} <span class="audit-more">자세히 ▸</span></td>
             <td class="c-date">${fmt(l.created_at)}</td>
           </tr>`;
         }).join('');
+        body.querySelectorAll('.audit-row').forEach((tr) => tr.addEventListener('click', () => openModal(current[+tr.dataset.idx])));
       }
-      // 페이지네이션 (필터는 현재 페이지 내에서만 적용됨을 안내)
       let html = '';
       for (let i = 1; i <= d.totalPages; i++) html += i === d.page ? `<span class="active">${i}</span>` : `<span data-pg="${i}">${i}</span>`;
       const pg = document.getElementById('pager');
@@ -98,10 +117,39 @@
       pg.querySelectorAll('[data-pg]').forEach((s) => s.addEventListener('click', () => { page = +s.dataset.pg; load(); scrollTo({ top: 0, behavior: 'smooth' }); }));
     }
 
+    // 상세 모달 열기 (삭제된 글도 저장된 스냅샷으로 전체 내용 표시)
+    const modalBg = document.getElementById('modalBg');
+    function openModal(l) {
+      if (!l) return;
+      const ent = ENTITY[l.entity_type] || { name: l.entity_type, icon: '•' };
+      const act = ACTION[l.action] || { t: l.action, c: '' };
+      const p = parse(l);
+      document.getElementById('modalHead').innerHTML = `
+        <div><span class="audit-badge ${act.c}">${ent.icon} ${ent.name} ${act.t}</span></div>
+        <div class="muted" style="font-size:13px;margin-top:8px">
+          별명 <b style="color:var(--text)">${l.username ? esc(l.username) : '시스템'}</b>
+          · 실명 <b style="color:var(--text)">${l.realname ? esc(l.realname) : '-'}</b>
+          · ${fmt(l.created_at)}</div>`;
+      let inner = '';
+      if (l.action === 'delete' && (ent.group === '글')) {
+        inner += `<div class="audit-deleted-tag">🗑️ 삭제된 ${ent.name}의 전체 내용</div>`;
+      }
+      if (p.title) inner += `<h2 style="margin:12px 0 6px">${esc(p.title)}</h2>`;
+      if (p.content) inner += `<div class="audit-content">${esc(p.content)}</div>`;
+      if (!p.title && !p.content && p.label) inner += `<div class="audit-content">${esc(p.label)}</div>`;
+      if (!p.title && !p.content && !p.label) inner += `<div class="muted">표시할 상세 내용이 없어요.</div>`;
+      document.getElementById('modalBody').innerHTML = inner;
+      modalBg.classList.remove('hidden');
+    }
+    function closeModal() { modalBg.classList.add('hidden'); }
+    document.getElementById('modalClose').addEventListener('click', closeModal);
+    modalBg.addEventListener('click', (e) => { if (e.target === modalBg) closeModal(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
+
     document.querySelectorAll('#filterTabs .pill').forEach((el) => el.addEventListener('click', () => {
       document.querySelectorAll('#filterTabs .pill').forEach((p) => p.classList.remove('active'));
       el.classList.add('active');
-      filter = el.dataset.f; load();
+      filter = el.dataset.f; page = 1; load();
     }));
 
     load();
@@ -116,6 +164,15 @@
     :root[data-theme="dark"] .act-edit { background:#3a2f1a; color:#f0c674; }
     :root[data-theme="dark"] .act-del { background:#3a2020; color:#e88; }
     #auditTable td { vertical-align:top; }
+    .audit-row { cursor:pointer; }
+    .audit-row:hover { background:var(--hover, rgba(0,0,0,0.03)); }
+    .audit-more { font-size:11px; color:var(--muted); margin-left:2px; white-space:nowrap; }
+    .audit-modal-bg { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:1000; padding:16px; }
+    .audit-modal-bg.hidden { display:none; }
+    .audit-modal { background:var(--card, #fff); color:var(--text); border-radius:14px; max-width:640px; width:100%; max-height:82vh; overflow:auto; padding:20px; box-shadow:0 12px 40px rgba(0,0,0,0.3); }
+    .audit-deleted-tag { display:inline-block; margin-top:12px; font-size:12px; font-weight:700; color:#c0392b; background:#fdeaea; padding:3px 9px; border-radius:6px; }
+    :root[data-theme="dark"] .audit-deleted-tag { background:#3a2020; color:#e88; }
+    .audit-content { white-space:pre-wrap; font-size:15px; line-height:1.6; margin-top:8px; word-break:break-word; }
   </style>
 </body>
 </html>
