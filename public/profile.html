@@ -27,6 +27,11 @@
       <input id="newPw" type="password" autocomplete="new-password" />
       <div style="margin-top:12px"><button id="pwChange" class="btn-sm">비밀번호 변경</button></div>
       <hr />
+      <!-- 2단계 인증(TOTP) -->
+      <label>🔐 2단계 인증 (인증 앱)</label>
+      <div id="twoFaState" class="muted" style="font-size:13px;margin-bottom:8px">불러오는 중…</div>
+      <div id="twoFaArea"></div>
+      <hr />
       <button id="withdrawBtn" class="btn-sm btn-danger">회원 탈퇴</button>
       <p class="muted" style="font-size:12px;margin-top:6px">탈퇴 시 내 정보는 삭제되고, 쓴 글은 '삭제된 사람'으로 남아요. 탈퇴 후 1주일간 재가입이 제한됩니다.</p>
     </div>
@@ -118,6 +123,45 @@
             showMsg(document.getElementById('pwMsg'), r.message, true);
           } catch (e) { showMsg(document.getElementById('pwMsg'), e.message); }
         });
+        // 2단계 인증 관리
+        const faState = document.getElementById('twoFaState');
+        const faArea = document.getElementById('twoFaArea');
+        async function renderTwoFa() {
+          faArea.innerHTML = '';
+          let enabled = false;
+          try { enabled = (await api.get('/api/auth/2fa/status')).enabled; } catch {}
+          if (enabled) {
+            faState.innerHTML = '✅ <b style="color:var(--green)">켜짐</b> — 로그인 시 인증 앱 코드가 필요해요.';
+            faArea.innerHTML = `<div class="row"><input id="faPw" type="password" class="grow" placeholder="비밀번호 확인 후 해제" autocomplete="current-password"><button id="faOff" class="btn-sm btn-danger">2단계 인증 끄기</button></div>`;
+            document.getElementById('faOff').addEventListener('click', async () => {
+              try { const r = await api.post('/api/auth/2fa/disable', { password: document.getElementById('faPw').value }); showMsg(pm(), r.message, true); renderTwoFa(); }
+              catch (e) { showMsg(pm(), e.message); }
+            });
+          } else {
+            faState.innerHTML = '⚪ <b>꺼짐</b> — 인증 앱(Google/Microsoft Authenticator 등)으로 보안을 강화할 수 있어요.';
+            faArea.innerHTML = `<button id="faStart" class="btn-sm">2단계 인증 켜기</button>`;
+            document.getElementById('faStart').addEventListener('click', startTwoFa);
+          }
+        }
+        async function startTwoFa() {
+          let d;
+          try { d = await api.post('/api/auth/2fa/setup'); } catch (e) { showMsg(pm(), e.message); return; }
+          const key = d.secret.replace(/(.{4})/g, '$1 ').trim();
+          faArea.innerHTML = `
+            <div class="card" style="background:var(--hover,rgba(0,0,0,0.03));margin-top:6px">
+              <p style="margin:0 0 6px">① 인증 앱에서 <b>키 직접 입력</b>으로 아래 키를 등록하세요.</p>
+              <div style="font-family:monospace;font-size:16px;font-weight:700;letter-spacing:2px;word-break:break-all;background:var(--card,#fff);padding:8px 10px;border-radius:8px;border:1px solid var(--line)">${esc(key)}</div>
+              <p class="muted" style="font-size:12px;margin:6px 0 0">계정명: <b>${esc(u.username)}</b> · 발급기관: 1-3반 커뮤니티 · 6자리/30초</p>
+              <p style="margin:12px 0 6px">② 앱에 표시된 <b>6자리 코드</b>를 입력해 확인하세요.</p>
+              <div class="row"><input id="faCode" inputmode="numeric" maxlength="6" class="grow" placeholder="000000"><button id="faOn" class="btn-sm">확인하고 켜기</button></div>
+            </div>`;
+          document.getElementById('faOn').addEventListener('click', async () => {
+            try { const r = await api.post('/api/auth/2fa/enable', { code: document.getElementById('faCode').value.trim() }); showMsg(pm(), r.message, true); renderTwoFa(); }
+            catch (e) { showMsg(pm(), e.message); }
+          });
+        }
+        renderTwoFa();
+
         const wb = document.getElementById('withdrawBtn');
         if (u.role === 'admin') { wb.disabled = true; wb.textContent = '관리자는 탈퇴 불가'; }
         else wb.addEventListener('click', async () => {

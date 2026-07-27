@@ -162,6 +162,13 @@ if (!(await db.prepare('SELECT id FROM chat_rooms LIMIT 1').get())) {
   if (!cols.includes('attachment_name')) await db.prepare('ALTER TABLE posts ADD COLUMN attachment_name TEXT').run();
 }
 
+// ---- 마이그레이션: 2단계 인증(TOTP) 컬럼 ----
+{
+  const cols = (await db.prepare('PRAGMA table_info(users)').all()).map((c) => c.name);
+  if (!cols.includes('totp_secret')) await db.prepare('ALTER TABLE users ADD COLUMN totp_secret TEXT').run();
+  if (!cols.includes('totp_enabled')) await db.prepare('ALTER TABLE users ADD COLUMN totp_enabled INTEGER NOT NULL DEFAULT 0').run();
+}
+
 // 회원 익명화: 별명·실명·이메일 리셋(글은 '삭제된 사람' 표시), 원래 이메일은 1주일 재가입 제한
 export async function anonymizeUser(id, label) {
   const u = await db.prepare('SELECT email FROM users WHERE id=?').get(id);

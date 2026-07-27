@@ -132,6 +132,14 @@ router.post('/rejoin-allow', requireAdmin, async (req, res) => {
   res.json({ ok: true });
 });
 
+// 2단계 인증 해제 (분실·잠김 복구용)
+router.post('/users/:id/reset-2fa', requireAdmin, async (req, res) => {
+  const t = await guard(req, res); if (!t) return;
+  await db.prepare('UPDATE users SET totp_enabled=0, totp_secret=NULL WHERE id=?').run(t.id);
+  await trace(t.id, `${t.username} 2단계 인증 해제`, req.user.id);
+  res.json({ ok: true });
+});
+
 // 비밀번호 초기화 (관리자가 임시 비번 지정)
 router.post('/users/:id/reset-password', requireAdmin, async (req, res) => {
   const t = await guard(req, res); if (!t) return;

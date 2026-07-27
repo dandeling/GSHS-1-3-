@@ -27,6 +27,10 @@
         <input id="realname" maxlength="20" required />
         <label>비밀번호 <span class="muted">(6자 이상)</span></label>
         <input id="password" type="password" autocomplete="new-password" required />
+        <label>비밀번호 확인 <span class="muted">(한 번 더 입력)</span></label>
+        <input id="password2" type="password" autocomplete="new-password" required />
+        <p class="muted hidden" id="pwMatch" style="margin:4px 0 0;font-size:12px"></p>
+        <div id="capBox" style="margin-top:12px"></div>
         <div style="margin-top:16px"><button type="submit" style="width:100%">가입 신청</button></div>
       </form>
       <p class="muted" style="margin-top:14px">가입 신청 후 <b>관리자 승인</b>이 완료되면 로그인할 수 있습니다.</p>
@@ -34,9 +38,22 @@
     </div>
   </main>
   <script type="module">
-    import { renderNav, api, showMsg } from '/js/common.js';
+    import { renderNav, api, showMsg, captchaWidget } from '/js/common.js';
     await renderNav();
     const msg = document.getElementById('msg');
+    const cap = captchaWidget(document.getElementById('capBox'));
+
+    // 비밀번호 확인 실시간 안내
+    const pw = document.getElementById('password'), pw2 = document.getElementById('password2'), pwm = document.getElementById('pwMatch');
+    const checkMatch = () => {
+      if (!pw2.value) { pwm.classList.add('hidden'); return true; }
+      const ok = pw.value === pw2.value;
+      pwm.classList.remove('hidden');
+      pwm.textContent = ok ? '✅ 비밀번호가 일치합니다.' : '⚠️ 비밀번호가 일치하지 않습니다.';
+      pwm.style.color = ok ? 'var(--green)' : 'var(--danger)';
+      return ok;
+    };
+    pw.addEventListener('input', checkMatch); pw2.addEventListener('input', checkMatch);
 
     // 이메일 인증 사용 여부
     let mailOn = false, verified = false;
@@ -58,16 +75,23 @@
     document.getElementById('form').addEventListener('submit', async (e) => {
       e.preventDefault();
       if (mailOn && !verified) { showMsg(msg, '이메일 인증을 먼저 완료해주세요.'); return; }
+      if (pw.value.length < 6) { showMsg(msg, '비밀번호는 6자 이상이어야 합니다.'); return; }
+      if (!checkMatch()) { showMsg(msg, '비밀번호와 비밀번호 확인이 일치하지 않습니다.'); return; }
       try {
         const d = await api.post('/api/auth/register', {
           email: document.getElementById('email').value.trim(),
           username: document.getElementById('username').value.trim(),
           realname: document.getElementById('realname').value.trim(),
-          password: document.getElementById('password').value,
+          password: pw.value,
+          passwordConfirm: pw2.value,
+          captchaToken: cap.token(),
+          captchaAnswer: cap.answer(),
         });
         showMsg(msg, d.message, true);
         document.getElementById('form').reset();
-      } catch (err) { showMsg(msg, err.message); }
+        pwm.classList.add('hidden');
+        cap.refresh();
+      } catch (err) { showMsg(msg, err.message); cap.refresh(); cap.clear(); }
     });
   </script>
 </body>

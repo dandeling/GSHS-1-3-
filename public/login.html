@@ -16,6 +16,12 @@
         <input id="login" autocomplete="username" required />
         <label>비밀번호</label>
         <input id="password" type="password" autocomplete="current-password" required />
+        <!-- 2단계 인증 코드 (설정된 계정만 표시) -->
+        <div id="totpBox" class="hidden">
+          <label>🔐 인증 앱 코드 <span class="muted">(6자리)</span></label>
+          <input id="totp" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="000000" />
+        </div>
+        <div id="capBox" style="margin-top:12px"></div>
         <div style="margin-top:16px"><button type="submit" class="grow" style="width:100%">로그인</button></div>
       </form>
       <p class="muted" style="margin-top:14px">계정이 없나요? <a href="/register.html">회원가입</a> · <a href="/find.html">아이디·비밀번호 찾기</a></p>
@@ -23,18 +29,37 @@
     </div>
   </main>
   <script type="module">
-    import { renderNav, api, showMsg } from '/js/common.js';
+    import { renderNav, api, showMsg, captchaWidget } from '/js/common.js';
     await renderNav();
     const msg = document.getElementById('msg');
+    const cap = captchaWidget(document.getElementById('capBox'));
+    const totpBox = document.getElementById('totpBox');
+    let twoFactor = false;
+
     document.getElementById('form').addEventListener('submit', async (e) => {
       e.preventDefault();
+      const body = {
+        login: document.getElementById('login').value.trim(),
+        password: document.getElementById('password').value,
+        captchaToken: cap.token(),
+        captchaAnswer: cap.answer(),
+      };
+      if (twoFactor) body.totpCode = document.getElementById('totp').value.trim();
       try {
-        await api.post('/api/auth/login', {
-          login: document.getElementById('login').value.trim(),
-          password: document.getElementById('password').value,
-        });
+        await api.post('/api/auth/login', body);
         location.href = '/';
-      } catch (err) { showMsg(msg, err.message); }
+      } catch (err) {
+        if (err.data?.twoFactorRequired) {
+          // 비밀번호는 맞음 → 인증 앱 코드 단계로 전환 (캡차는 그대로 유지)
+          twoFactor = true;
+          totpBox.classList.remove('hidden');
+          document.getElementById('totp').focus();
+          showMsg(msg, err.message);
+        } else {
+          showMsg(msg, err.message);
+          cap.refresh(); cap.clear();   // 실패 시 새 캡차
+        }
+      }
     });
   </script>
 </body>
