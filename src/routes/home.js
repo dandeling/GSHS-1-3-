@@ -62,7 +62,10 @@ router.get('/', requireAuth, async (req, res) => {
   const checkedToday = !!(await db.prepare('SELECT 1 FROM attendance WHERE user_id=? AND day=?').get(req.user.id, today));
   const attendCount = (await db.prepare('SELECT COUNT(*) c FROM attendance WHERE user_id=?').get(req.user.id)).c;
 
-  res.json({ meal, ddays, popular, hallOfFame, isAdmin: req.user.role === 'admin', today,
+  // 오늘의 8교시·야간
+  const special = await db.prepare('SELECT slot, content FROM special_schedule WHERE sched_date=? ORDER BY id ASC').all(today);
+
+  res.json({ meal, ddays, popular, hallOfFame, special, isAdmin: req.user.role === 'admin', today,
     attendance: { checkedToday, total: attendCount } });
 });
 

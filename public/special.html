@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>8교시·야간 · 1-3반 커뮤니티</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <main>
+    <div class="card">
+      <h1>🌙 8교시 · 야간</h1>
+      <p class="muted">날짜별로 바뀌는 8교시·야간 시간을 확인하세요. (관리자만 등록)</p>
+      <!-- 관리자 등록 -->
+      <div id="adminBox" class="hidden">
+        <div id="msg" class="hidden"></div>
+        <div class="row">
+          <input id="sdate" type="date" style="flex:1" />
+          <select id="sslot" style="flex:1"></select>
+        </div>
+        <input id="scontent" placeholder="내용 (예: 자습 / 물리 특강 / 동아리)" maxlength="100" style="margin-top:8px" />
+        <div style="margin-top:8px"><button id="addBtn" class="btn-sm">등록</button></div>
+      </div>
+    </div>
+    <div class="card"><div id="list">불러오는 중…</div></div>
+  </main>
+  <script type="module">
+    import { renderNav, api, esc, showMsg } from '/js/common.js';
+    await renderNav({ requireLogin: true });
+    let data = await api.get('/api/special');
+
+    if (data.isAdmin) {
+      document.getElementById('adminBox').classList.remove('hidden');
+      const ss = document.getElementById('sslot');
+      ss.innerHTML = data.slots.map((s) => `<option>${esc(s)}</option>`).join('');
+      document.getElementById('sdate').value = data.today;
+      document.getElementById('addBtn').addEventListener('click', async () => {
+        try {
+          await api.post('/api/special', { sched_date: document.getElementById('sdate').value, slot: ss.value, content: document.getElementById('scontent').value });
+          document.getElementById('scontent').value = '';
+          await reload();
+        } catch (e) { showMsg(document.getElementById('msg'), e.message); }
+      });
+    }
+
+    function fmtDate(s) {
+      const d = new Date(s + 'T00:00:00');
+      const w = ['일','월','화','수','목','금','토'][d.getDay()];
+      return `${d.getMonth()+1}월 ${d.getDate()}일 (${w})`;
+    }
+
+    function render() {
+      const box = document.getElementById('list');
+      if (!data.items.length) { box.innerHTML = '<div class="empty">등록된 8교시·야간 일정이 없어요.</div>'; return; }
+      const byDate = {};
+      data.items.forEach((it) => { (byDate[it.sched_date] ||= []).push(it); });
+      box.innerHTML = Object.keys(byDate).sort().map((date) => {
+        const isToday = date === data.today;
+        return `<div style="margin-bottom:16px">
+          <div class="section-title" style="margin:6px 0"><b>${fmtDate(date)}</b>${isToday?' <span class="lv">오늘</span>':''}<span class="line"></span></div>
+          ${byDate[date].map((it) => `<div class="row" style="justify-content:space-between;border-bottom:1px solid var(--line);padding:9px 2px">
+            <span><span class="tag-chip">${esc(it.slot)}</span> ${esc(it.content)}</span>
+            ${data.isAdmin ? `<a href="#" class="muted" style="font-size:12px" data-del="${it.id}">삭제</a>` : ''}</span></div>`).join('')}
+        </div>`;
+      }).join('');
+      box.querySelectorAll('[data-del]').forEach((a) => a.addEventListener('click', async (e) => {
+        e.preventDefault(); if (!confirm('삭제할까요?')) return;
+        await api.del('/api/special/' + a.dataset.del); await reload();
+      }));
+    }
+    async function reload() { data = await api.get('/api/special'); render(); }
+    render();
+  </script>
+</body>
+</html>

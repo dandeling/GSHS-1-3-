@@ -120,6 +120,11 @@ CREATE TABLE IF NOT EXISTS rejoin_blocks (
 CREATE TABLE IF NOT EXISTS timetable (
   day INTEGER NOT NULL, period INTEGER NOT NULL, subject TEXT NOT NULL DEFAULT '', PRIMARY KEY (day, period)
 );
+-- 8교시·야간 등 날짜별로 바뀌는 특별 시간 (관리자 등록)
+CREATE TABLE IF NOT EXISTS special_schedule (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, sched_date TEXT NOT NULL, slot TEXT NOT NULL, content TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 CREATE INDEX IF NOT EXISTS idx_posts_board ON posts(board, subject, category);
 CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(post_id);
 CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_logs(entity_type, entity_id);

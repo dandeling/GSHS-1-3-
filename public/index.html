@@ -22,6 +22,7 @@
       <!-- D-day + 출석 -->
       <div id="widgets" class="hidden" style="margin-top:14px">
         <div id="ddayRow" class="dday-row"></div>
+        <div id="specialRow" style="margin-top:8px"></div>
         <button id="attendBtn" class="btn-ghost btn-sm" style="margin-top:10px">📅 오늘 출석체크</button>
         <span id="attendMsg" class="muted" style="margin-left:8px"></span>
       </div>
@@ -89,6 +90,12 @@
       dr.innerHTML = h.ddays.length
         ? h.ddays.map((d) => `<span class="dday-chip"><b>${esc(d.title)}</b> ${d.dleft===0?'D-DAY':'D-'+d.dleft}</span>`).join('')
         : `<span class="muted" style="font-size:12px">등록된 D-day가 없어요.</span>`;
+      // 오늘의 8교시·야간
+      const sr = document.getElementById('specialRow');
+      if (h.special && h.special.length) {
+        sr.innerHTML = `<a href="/special.html" style="text-decoration:none">${h.special.map((s) => `<span class="dday-chip"><b>${esc(s.slot)}</b> ${esc(s.content)}</span>`).join(' ')}</a>`;
+      } else { sr.innerHTML = ''; }
+
       const ab = document.getElementById('attendBtn'), am = document.getElementById('attendMsg');
       if (h.attendance.checkedToday) { ab.disabled = true; ab.textContent = '✅ 출석완료'; am.textContent = `누적 ${h.attendance.total}일`; }
       else ab.addEventListener('click', async () => {
