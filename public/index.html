@@ -172,7 +172,7 @@
       else { params.set('board', 'all'); if (tag) params.set('tag', tag); }
       if (q) params.set('q', q);
       const d = await api.get('/api/posts?' + params);
-      feedEl.innerHTML = renderDcTable(d.posts, tagName);
+      feedEl.innerHTML = renderDcTable(d.posts, tagName, undefined, d.total - (d.page - 1) * d.pageSize);
       let html = '';
       for (let i = 1; i <= d.totalPages; i++) html += i===d.page ? `<span class="active">${i}</span>` : `<span data-pg="${i}">${i}</span>`;
       const pg = document.getElementById('pager');

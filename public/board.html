@@ -78,7 +78,8 @@
       const d = await api.get('/api/posts?' + params);
       const tagName = (c) => { const t = meta.tags.find((x)=>x.code===c); return t?`${t.emoji} ${t.name}`:''; };
       const subName = (c) => { const s = meta.subjects.find((x)=>x.code===c); return s?s.name:''; };
-      feedEl.innerHTML = renderDcTable(d.posts, tagName, subName);
+      const startNo = d.total - (d.page - 1) * d.pageSize;
+      feedEl.innerHTML = renderDcTable(d.posts, tagName, subName, startNo);
       let html=''; for (let i=1;i<=d.totalPages;i++) html += i===d.page?`<span class="active">${i}</span>`:`<span data-pg="${i}">${i}</span>`;
       const pg=document.getElementById('pager'); pg.innerHTML=d.totalPages>1?html:'';
       pg.querySelectorAll('[data-pg]').forEach((s)=>s.addEventListener('click',()=>{page=+s.dataset.pg;load();scrollTo({top:0,behavior:'smooth'});}));

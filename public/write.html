@@ -49,7 +49,7 @@
         </div>
 
         <div class="row" style="margin-top:16px">
-          <button type="submit">저장</button>
+          <button type="submit" id="saveBtn">저장</button>
           <a href="javascript:history.back()" class="btn btn-ghost">취소</a>
         </div>
       </form>
@@ -127,8 +127,13 @@
       else { if (qs('subject')) ss.value = qs('subject'); if (qs('category')) cs.value = qs('category'); }
     }
 
+    let submitting = false;
     document.getElementById('form').addEventListener('submit', async (e) => {
       e.preventDefault();
+      if (submitting) return;               // 중복 제출 방지
+      submitting = true;
+      const saveBtn = document.getElementById('saveBtn');
+      saveBtn.disabled = true; saveBtn.textContent = '저장 중…';
       const body = { board, title: document.getElementById('title').value.trim(), content: document.getElementById('content').value.trim() };
       if (board === 'free') {
         body.tag = selectedTag;
@@ -143,7 +148,10 @@
       try {
         if (editId) { await api.put('/api/posts/' + editId, body); location.href = '/post.html?id=' + editId; }
         else { const r = await api.post('/api/posts', body); location.href = '/post.html?id=' + r.id; }
-      } catch (err) { showMsg(msg, err.message); }
+      } catch (err) {
+        showMsg(msg, err.message);
+        submitting = false; saveBtn.disabled = false; saveBtn.textContent = '저장';
+      }
     });
   </script>
 </body>
