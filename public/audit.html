@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>전체 기록 · 1-3반 커뮤니티</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <main>
+    <div class="card">
+      <h1>📋 전체 기록</h1>
+      <p class="muted">사이트에서 일어난 <b>모든 추가·수정·삭제</b>를 별명·실명·수정한 내용 순으로 볼 수 있어요. (3개월간 보관)</p>
+      <div class="pills" id="filterTabs">
+        <span class="pill active" data-f="">전체</span>
+        <span class="pill" data-f="글">글·댓글</span>
+        <span class="pill" data-f="회원">회원</span>
+        <span class="pill" data-f="일정">일정·급식</span>
+        <span class="pill" data-f="기타">기타</span>
+      </div>
+      <div class="tbl-scroll" style="margin-top:10px">
+        <table class="dctable" id="auditTable">
+          <thead><tr>
+            <th style="text-align:left">별명</th>
+            <th style="text-align:left">실명</th>
+            <th style="text-align:left">수정한거</th>
+            <th class="c-date">시각</th>
+          </tr></thead>
+          <tbody id="auditBody"><tr><td colspan="4" class="muted" style="padding:20px;text-align:center">불러오는 중…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="pager" id="pager"></div>
+    </div>
+  </main>
+
+  <script type="module">
+    import { renderNav, api, esc, fmt } from '/js/common.js';
+    await renderNav({ requireLogin: true, requireAdmin: true });
+
+    // 엔티티/동작 → 한글 라벨 + 아이콘
+    const ENTITY = {
+      post: { name: '글', icon: '📝', group: '글' },
+      comment: { name: '댓글', icon: '💬', group: '글' },
+      chat: { name: '채팅', icon: '⚡', group: '글' },
+      member: { name: '회원', icon: '👤', group: '회원' },
+      event: { name: '일정', icon: '📅', group: '일정' },
+      meal: { name: '급식', icon: '🍽️', group: '일정' },
+      dday: { name: 'D-day', icon: '⏳', group: '일정' },
+      special: { name: '8교시·야간', icon: '🌙', group: '기타' },
+      timetable: { name: '시간표', icon: '🕐', group: '기타' },
+      weekly_poll: { name: '주간투표', icon: '🗳️', group: '기타' },
+    };
+    const ACTION = { create: { t: '추가', c: 'act-add' }, update: { t: '수정', c: 'act-edit' }, delete: { t: '삭제', c: 'act-del' } };
+
+    // snapshot(JSON 또는 원문) → 사람이 읽는 내용
+    function readable(l) {
+      const ent = ENTITY[l.entity_type] || { name: l.entity_type, icon: '•' };
+      let detail = '';
+      try {
+        const s = JSON.parse(l.snapshot);
+        if (s && typeof s === 'object') detail = s.label || s.title || s.content || '';
+        else detail = String(l.snapshot ?? '');
+      } catch { detail = String(l.snapshot ?? ''); }
+      detail = detail.replace(/\s+/g, ' ').trim();
+      if (detail.length > 80) detail = detail.slice(0, 80) + '…';
+      return { ent, detail };
+    }
+
+    let page = 1, filter = '';
+    const body = document.getElementById('auditBody');
+
+    async function load() {
+      body.innerHTML = `<tr><td colspan="4" class="muted" style="padding:20px;text-align:center">불러오는 중…</td></tr>`;
+      const d = await api.get('/api/admin/audit?page=' + page);
+      let logs = d.logs;
+      if (filter) logs = logs.filter((l) => (ENTITY[l.entity_type]?.group || '기타') === filter);
+      if (!logs.length) {
+        body.innerHTML = `<tr><td colspan="4" class="muted" style="padding:20px;text-align:center">기록이 없어요.</td></tr>`;
+      } else {
+        body.innerHTML = logs.map((l) => {
+          const { ent, detail } = readable(l);
+          const act = ACTION[l.action] || { t: l.action, c: '' };
+          const nick = l.username ? esc(l.username) : '<span class="muted">시스템</span>';
+          const real = l.realname ? esc(l.realname) : '<span class="muted">-</span>';
+          return `<tr>
+            <td>${nick}</td>
+            <td>${real}</td>
+            <td><span class="audit-badge ${act.c}">${ent.icon} ${ent.name} ${act.t}</span> ${esc(detail)}</td>
+            <td class="c-date">${fmt(l.created_at)}</td>
+          </tr>`;
+        }).join('');
+      }
+      // 페이지네이션 (필터는 현재 페이지 내에서만 적용됨을 안내)
+      let html = '';
+      for (let i = 1; i <= d.totalPages; i++) html += i === d.page ? `<span class="active">${i}</span>` : `<span data-pg="${i}">${i}</span>`;
+      const pg = document.getElementById('pager');
+      pg.innerHTML = d.totalPages > 1 ? html : '';
+      pg.querySelectorAll('[data-pg]').forEach((s) => s.addEventListener('click', () => { page = +s.dataset.pg; load(); scrollTo({ top: 0, behavior: 'smooth' }); }));
+    }
+
+    document.querySelectorAll('#filterTabs .pill').forEach((el) => el.addEventListener('click', () => {
+      document.querySelectorAll('#filterTabs .pill').forEach((p) => p.classList.remove('active'));
+      el.classList.add('active');
+      filter = el.dataset.f; load();
+    }));
+
+    load();
+  </script>
+
+  <style>
+    .audit-badge { display:inline-block; font-size:11px; font-weight:700; padding:2px 7px; border-radius:6px; margin-right:4px; white-space:nowrap; }
+    .act-add { background:#e6f4ea; color:#1e7e34; }
+    .act-edit { background:#fff4e0; color:#b8791b; }
+    .act-del { background:#fdeaea; color:#c0392b; }
+    :root[data-theme="dark"] .act-add { background:#1e3327; color:#7ee2a0; }
+    :root[data-theme="dark"] .act-edit { background:#3a2f1a; color:#f0c674; }
+    :root[data-theme="dark"] .act-del { background:#3a2020; color:#e88; }
+    #auditTable td { vertical-align:top; }
+  </style>
+</body>
+</html>

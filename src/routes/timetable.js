@@ -1,5 +1,5 @@
 import express from 'express';
-import db from '../db.js';
+import db, { logAudit } from '../db.js';
 import { requireAuth, requireAdmin } from '../middleware.js';
 
 const router = express.Router();
@@ -29,6 +29,7 @@ router.post('/', requireAdmin, async (req, res) => {
       await db.prepare('DELETE FROM timetable WHERE day=? AND period=?').run(day, period);
     }
   }
+  await logAudit('timetable', 0, 'update', JSON.stringify({ label: '시간표 저장' }), req.user.id);
   res.json({ ok: true });
 });
 

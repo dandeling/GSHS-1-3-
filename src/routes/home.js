@@ -1,5 +1,5 @@
 import express from 'express';
-import db, { addPoint } from '../db.js';
+import db, { addPoint, logAudit } from '../db.js';
 import { requireAuth, requireAdmin } from '../middleware.js';
 import { fetchMeal } from '../neis.js';
 
@@ -87,11 +87,13 @@ router.post('/meal', requireAdmin, async (req, res) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: '날짜 형식을 확인하세요.' });
   if (!content?.trim()) {
     await db.prepare('DELETE FROM meals WHERE meal_date=?').run(date);
+    await logAudit('meal', 0, 'delete', JSON.stringify({ label: `${date} 급식 삭제` }), req.user.id);
     return res.json({ ok: true, cleared: true });
   }
   await db.prepare(`INSERT INTO meals (meal_date, content, source) VALUES (?, ?, 'manual')
     ON CONFLICT(meal_date) DO UPDATE SET content=excluded.content, source='manual', updated_at=datetime('now')`)
     .run(date, content.trim());
+  await logAudit('meal', 0, 'update', JSON.stringify({ label: `${date} 급식 등록/수정` }), req.user.id);
   res.json({ ok: true });
 });
 
@@ -106,10 +108,13 @@ router.post('/ddays', requireAdmin, async (req, res) => {
   const { title, target_date } = req.body || {};
   if (!title?.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(target_date || '')) return res.status(400).json({ error: '제목과 날짜(YYYY-MM-DD)를 확인하세요.' });
   const info = await db.prepare('INSERT INTO ddays (title, target_date) VALUES (?, ?)').run(title.trim(), target_date);
+  await logAudit('dday', info.lastInsertRowid, 'create', JSON.stringify({ label: `${target_date} · ${title.trim()}` }), req.user.id);
   res.json({ ok: true, id: info.lastInsertRowid });
 });
 router.delete('/ddays/:id', requireAdmin, async (req, res) => {
+  const d = await db.prepare('SELECT title, target_date FROM ddays WHERE id=?').get(req.params.id);
   await db.prepare('DELETE FROM ddays WHERE id=?').run(req.params.id);
+  if (d) await logAudit('dday', req.params.id, 'delete', JSON.stringify({ label: `${d.target_date} · ${d.title}` }), req.user.id);
   res.json({ ok: true });
 });
 
