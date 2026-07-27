@@ -100,6 +100,8 @@ export async function renderNav(opts = {}) {
     <a class="sb-link" href="/board.html?board=resource"><span class="e">📚</span> 자료공유</a>
     <a class="sb-link" href="/chat.html"><span class="e">⚡</span> 반 채팅방</a>
     <a class="sb-link" href="/calendar.html"><span class="e">📅</span> 캘린더</a>
+    <a class="sb-link" href="/timetable.html"><span class="e">🕐</span> 시간표</a>
+    <a class="sb-link" href="/special.html"><span class="e">🌙</span> 8교시·야간</a>
     ${me && me.role === 'admin' ? '<a class="sb-link" href="/admin.html"><span class="e">🛠️</span> 관리자 페이지</a>' : ''}
     <div class="sb-div"></div>
     <a class="sb-link" href="/info.html?p=about"><span class="e">🏫</span> 학교 소개</a>
@@ -124,6 +126,8 @@ export async function renderNav(opts = {}) {
         <div class="cm-title" style="margin-top:12px">🏫 소통</div>
         <a class="cm-link" href="/chat.html">⚡ 반 채팅방</a>
         <a class="cm-link" href="/calendar.html">📅 캘린더</a>
+        <a class="cm-link" href="/timetable.html">🕐 시간표</a>
+        <a class="cm-link" href="/special.html">🌙 8교시·야간</a>
         ${me.role === 'admin' ? '<a class="cm-link" href="/admin.html">🛠️ 관리자</a>' : ''}
       </div>
       <div class="cm-box">
@@ -213,7 +217,7 @@ export function renderDcTable(posts, tagName, subjName) {
     const lvIcon = p.author_role === 'admin' ? '👑' : lv.emoji;
     return `<tr class="${p.board==='notice'?'is-notice':''}" onclick="location.href='/post.html?id=${p.id}'">
       <td class="c-no">${noCell}</td>
-      <td class="c-subj">${head}<span class="subj-title">${esc(p.title)}</span>${cmt}</td>
+      <td class="c-subj">${head}<span class="subj-title">${esc(p.title)}</span>${p.has_attach ? ' <span title="첨부파일">📎</span>' : ''}${cmt}</td>
       <td class="c-user"><span class="lv-dot" title="${p.author_role==='admin'?'운영자':lv.name}">${lvIcon}</span><span class="clickable-user" onclick="event.stopPropagation();location.href='/profile.html?u=${encodeURIComponent(p.author).replace(/'/g, '%27')}'">${esc(p.author)}</span></td>
       <td class="c-date">${fmt(p.created_at)}</td>
       <td class="c-num c-views">${p.views}</td>

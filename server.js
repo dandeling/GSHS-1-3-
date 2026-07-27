@@ -15,13 +15,16 @@ import usersRouter from './src/routes/users.js';
 import notificationsRouter from './src/routes/notifications.js';
 import dmRouter from './src/routes/dm.js';
 import inquiriesRouter from './src/routes/inquiries.js';
+import weeklyPollRouter from './src/routes/weeklyPoll.js';
+import timetableRouter from './src/routes/timetable.js';
+import specialRouter from './src/routes/special.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '8mb' })); // 첨부(base64) 여유
+app.use(express.urlencoded({ extended: true, limit: '8mb' }));
 app.use(cookieParser());
 
 // 메타 정보 (과목/분류/말머리 목록) — 프론트에서 사용
@@ -37,6 +40,9 @@ app.use('/api/users', usersRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use('/api/dm', dmRouter);
 app.use('/api/inquiries', inquiriesRouter);
+app.use('/api/weekly-poll', weeklyPollRouter);
+app.use('/api/timetable', timetableRouter);
+app.use('/api/special', specialRouter);
 app.use('/api/chat', chatRouter);
 app.use('/api/calendar', calendarRouter);
 app.use('/api/admin', adminRouter);

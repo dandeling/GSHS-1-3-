@@ -26,6 +26,9 @@
       <label>새 비밀번호 <span class="muted">(6자 이상)</span></label>
       <input id="newPw" type="password" autocomplete="new-password" />
       <div style="margin-top:12px"><button id="pwChange" class="btn-sm">비밀번호 변경</button></div>
+      <hr />
+      <button id="withdrawBtn" class="btn-sm btn-danger">회원 탈퇴</button>
+      <p class="muted" style="font-size:12px;margin-top:6px">탈퇴 시 내 정보는 삭제되고, 쓴 글은 '삭제된 사람'으로 남아요. 탈퇴 후 1주일간 재가입이 제한됩니다.</p>
     </div>
 
     <div class="section-title">📝 작성한 글<span class="line"></span></div>
@@ -63,6 +66,7 @@
           <div class="profile-avatar">${esc(u.username[0]||'?')}</div>
           <div class="grow">
             <div class="row" style="gap:8px"><h1 style="margin:0">${esc(u.username)}</h1>${levelBadge(u.point, u.role)}</div>
+            ${u.realname ? `<div class="muted" style="font-size:13px">실명: <b>${esc(u.realname)}</b> ${d.isMe ? '' : '<span style="font-size:11px">(관리자만 표시)</span>'}</div>` : ''}
             <div class="muted">가입 ${joined.getFullYear()}.${joined.getMonth()+1}.${joined.getDate()}
               ${u.role==='admin'?'· 운영자':`· 활동점수 ${u.point}점 ${ni.next?`(다음 ${ni.next.emoji}${ni.next.name}까지 ${ni.remain}점)`:''}`}</div>
           </div>
@@ -113,6 +117,13 @@
             document.getElementById('curPw').value = ''; document.getElementById('newPw').value = '';
             showMsg(document.getElementById('pwMsg'), r.message, true);
           } catch (e) { showMsg(document.getElementById('pwMsg'), e.message); }
+        });
+        const wb = document.getElementById('withdrawBtn');
+        if (u.role === 'admin') { wb.disabled = true; wb.textContent = '관리자는 탈퇴 불가'; }
+        else wb.addEventListener('click', async () => {
+          if (!confirm('정말 탈퇴하시겠어요?\n내 정보가 삭제되고 1주일간 재가입이 제한됩니다.')) return;
+          try { await api.post('/api/auth/withdraw'); alert('탈퇴가 완료됐어요.'); location.href = '/login.html'; }
+          catch (e) { showMsg(document.getElementById('pwMsg'), e.message); }
         });
       }
     } catch (err) {

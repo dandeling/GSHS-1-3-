@@ -22,10 +22,15 @@
       <!-- D-day + 출석 -->
       <div id="widgets" class="hidden" style="margin-top:14px">
         <div id="ddayRow" class="dday-row"></div>
+        <div id="specialRow" style="margin-top:8px"></div>
         <button id="attendBtn" class="btn-ghost btn-sm" style="margin-top:10px">📅 오늘 출석체크</button>
         <span id="attendMsg" class="muted" style="margin-left:8px"></span>
       </div>
     </div>
+
+    <!-- 이주의 투표 -->
+    <div class="section-title hidden" id="wpTitle">🗳️ 이주의 투표<span class="line"></span></div>
+    <div class="card hidden" id="wpCard"></div>
 
     <!-- 오늘의 급식 -->
     <div class="section-title">🍽️ 오늘의 급식 <span class="sub" id="mealDate"></span><span class="line"></span></div>
@@ -85,12 +90,21 @@
       dr.innerHTML = h.ddays.length
         ? h.ddays.map((d) => `<span class="dday-chip"><b>${esc(d.title)}</b> ${d.dleft===0?'D-DAY':'D-'+d.dleft}</span>`).join('')
         : `<span class="muted" style="font-size:12px">등록된 D-day가 없어요.</span>`;
+      // 오늘의 8교시·야간
+      const sr = document.getElementById('specialRow');
+      if (h.special && h.special.length) {
+        sr.innerHTML = `<a href="/special.html" style="text-decoration:none">${h.special.map((s) => `<span class="dday-chip"><b>${esc(s.slot)}</b> ${esc(s.content)}</span>`).join(' ')}</a>`;
+      } else { sr.innerHTML = ''; }
+
       const ab = document.getElementById('attendBtn'), am = document.getElementById('attendMsg');
       if (h.attendance.checkedToday) { ab.disabled = true; ab.textContent = '✅ 출석완료'; am.textContent = `누적 ${h.attendance.total}일`; }
       else ab.addEventListener('click', async () => {
         const r = await api.post('/api/home/attendance');
         ab.disabled = true; ab.textContent = '✅ 출석완료'; am.textContent = `누적 ${r.total||''}일 · +2점`;
       });
+
+      // 이주의 투표
+      await loadWeeklyPoll();
 
       document.getElementById('popularCard').innerHTML = h.popular.length
         ? h.popular.map((p, i) => `<div class="rank-item" onclick="location.href='/post.html?id=${p.id}'">
@@ -111,6 +125,29 @@
       // 미로그인 시 홈 API 401 → 조용히 안내
       ['mealCard','popularCard','fameCard'].forEach((id) =>
         document.getElementById(id).innerHTML = `<div class="empty">로그인하면 볼 수 있어요.</div>`);
+    }
+
+    async function loadWeeklyPoll() {
+      let data;
+      try { data = await api.get('/api/weekly-poll'); } catch { return; }
+      const title = document.getElementById('wpTitle'), card = document.getElementById('wpCard');
+      if (!data.poll) { title.classList.add('hidden'); card.classList.add('hidden'); return; }
+      title.classList.remove('hidden'); card.classList.remove('hidden');
+      const render = (pl) => {
+        card.innerHTML = `<div class="poll" style="margin-top:0"><div class="poll-q">🗳️ ${esc(pl.question)}</div>
+          ${pl.options.map((o) => {
+            const pct = pl.total ? Math.round(o.votes / pl.total * 100) : 0;
+            const voted = pl.myOption === o.id;
+            return `<div class="poll-opt ${voted?'voted':''}" data-opt="${o.id}">
+              <div class="bar" style="width:${pl.myOption?pct:0}%"></div>
+              <div class="lbl"><span>${voted?'✓ ':''}${esc(o.text)}</span>${pl.myOption?`<span class="pct">${pct}% (${o.votes})</span>`:''}</div></div>`;
+          }).join('')}
+          <div class="poll-total">${pl.myOption?`총 ${pl.total}표`:'선택지를 눌러 투표하세요'}</div></div>`;
+        card.querySelectorAll('[data-opt]').forEach((el) => el.addEventListener('click', async () => {
+          try { const r = await api.post('/api/weekly-poll/vote', { option_id: +el.dataset.opt }); render(r.poll); } catch (e) {}
+        }));
+      };
+      render(data.poll);
     }
 
     // 카테고리 알약
