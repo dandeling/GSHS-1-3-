@@ -138,13 +138,21 @@ if (!(await db.prepare('SELECT id FROM chat_rooms LIMIT 1').get())) {
   await db.prepare("INSERT INTO chat_rooms (name, created_by) VALUES ('전체 채팅방', NULL)").run();
 }
 
-// 기본 관리자 계정 시딩
-if (!(await db.prepare('SELECT id FROM users WHERE username=?').get('admin'))) {
+// 기본 관리자 계정 시딩 + 비밀번호 동기화
+// - 관리자가 없으면 생성 (아이디 admin)
+// - 이미 있으면: ADMIN_PASSWORD가 설정된 경우 부팅 시 그 값으로 비번을 맞춤(복구/변경 보장)
+{
   const pw = process.env.ADMIN_PASSWORD || 'admin1234';
-  await db.prepare(`INSERT INTO users (email, username, realname, grade, student_id, password, role, status)
-    VALUES (?, ?, ?, ?, ?, ?, 'admin', 'active')`)
-    .run('admin@g.gne.go.kr', 'admin', '관리자', 0, '0000', bcrypt.hashSync(pw, 10));
-  console.log('[db] 기본 관리자 계정 생성됨 (아이디: admin)');
+  const admin = await db.prepare("SELECT id, username FROM users WHERE role='admin' ORDER BY id ASC LIMIT 1").get();
+  if (!admin) {
+    await db.prepare(`INSERT INTO users (email, username, realname, grade, student_id, password, role, status)
+      VALUES (?, ?, ?, ?, ?, ?, 'admin', 'active')`)
+      .run('admin@g.gne.go.kr', 'admin', '관리자', 0, '0000', bcrypt.hashSync(pw, 10));
+    console.log('[db] 기본 관리자 계정 생성됨 (아이디: admin)');
+  } else if (process.env.ADMIN_PASSWORD) {
+    await db.prepare("UPDATE users SET password=?, status='active' WHERE id=?").run(bcrypt.hashSync(pw, 10), admin.id);
+    console.log(`[db] 관리자 비밀번호를 ADMIN_PASSWORD로 동기화 (아이디: ${admin.username})`);
+  }
 }
 
 // ---- 마이그레이션: posts 첨부 컬럼 (기존 DB 대비) ----
