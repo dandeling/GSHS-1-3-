@@ -172,6 +172,16 @@ export async function renderNav(opts = {}) {
     };
     refreshBadge();
     setInterval(refreshBadge, 30000);
+
+    // 벌점 경고창 (부과 후 첫 접속 시 1회 표시)
+    (async () => {
+      try {
+        const w = await api.get('/api/notifications/warnings');
+        if (w.warnings && w.warnings.length) {
+          setTimeout(() => { w.warnings.forEach((x) => alert(x.text)); }, 250);
+        }
+      } catch {}
+    })();
   }
 
   return me;

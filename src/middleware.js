@@ -69,5 +69,20 @@ export async function addDemerit(userId) {
 
   await db.prepare('UPDATE users SET demerit=?, status=?, suspended_until=? WHERE id=?')
     .run(demerit, status, suspendedUntil, userId);
+
+  // 로그인 시 경고창으로 1회 표시할 벌점 경고 저장
+  let warn;
+  if (demerit >= 9) {
+    warn = `🚫 누적 벌점 ${demerit}점으로 강퇴되었습니다.`;
+  } else if (status === 'suspended') {
+    const u = suspendedUntil ? new Date(suspendedUntil) : null;
+    const p = (n) => String(n).padStart(2, '0');
+    const untilStr = u ? `${u.getMonth() + 1}월 ${u.getDate()}일 ${p(u.getHours())}:${p(u.getMinutes())}` : '';
+    warn = `⚠️ 경고: 벌점이 부과되어 누적 ${demerit}점입니다.\n계정이 정지되었습니다${untilStr ? ` (해제 예정: ${untilStr})` : ''}.`;
+  } else {
+    warn = `⚠️ 경고: 벌점 1점이 부과되었습니다.\n현재 누적 ${demerit}점 — 3점 1일 정지 / 6점 1주 정지 / 9점 강퇴.`;
+  }
+  await db.prepare('INSERT INTO warnings (user_id, text) VALUES (?, ?)').run(userId, warn);
+
   return { ...user, demerit, status, suspended_until: suspendedUntil };
 }

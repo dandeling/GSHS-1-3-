@@ -1,6 +1,6 @@
 import express from 'express';
 import db from '../db.js';
-import { requireAuth } from '../middleware.js';
+import { requireAuth, loadUser } from '../middleware.js';
 
 const router = express.Router();
 
@@ -9,6 +9,16 @@ router.get('/count', requireAuth, async (req, res) => {
   const notif = (await db.prepare('SELECT COUNT(*) c FROM notifications WHERE user_id=? AND is_read=0').get(req.user.id)).c;
   const dm = (await db.prepare('SELECT COUNT(*) c FROM dm_messages WHERE recipient_id=? AND is_read=0').get(req.user.id)).c;
   res.json({ notif, dm, total: notif + dm });
+});
+
+// 안읽은 벌점 경고 조회(조회 즉시 확인 처리) — 클라이언트가 경고창으로 표시
+// 정지·대기 상태여도 경고를 볼 수 있도록 loadUser 사용
+router.get('/warnings', async (req, res) => {
+  const user = await loadUser(req);
+  if (!user) return res.json({ warnings: [] });
+  const rows = await db.prepare('SELECT id, text, created_at FROM warnings WHERE user_id=? AND seen=0 ORDER BY id ASC').all(user.id);
+  if (rows.length) await db.prepare('UPDATE warnings SET seen=1 WHERE user_id=? AND seen=0').run(user.id);
+  res.json({ warnings: rows });
 });
 
 // 알림 목록

@@ -136,6 +136,11 @@ CREATE TABLE IF NOT EXISTS reports (
   reporter_id INTEGER NOT NULL, reason TEXT, status TEXT NOT NULL DEFAULT 'open',
   created_at TEXT NOT NULL DEFAULT (datetime('now')), handled_at TEXT, handler_id INTEGER
 );
+-- 벌점 경고(로그인 시 경고창으로 1회 표시)
+CREATE TABLE IF NOT EXISTS warnings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, text TEXT NOT NULL,
+  seen INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 CREATE INDEX IF NOT EXISTS idx_posts_board ON posts(board, subject, category);
 CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(post_id);
 CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_logs(entity_type, entity_id);
