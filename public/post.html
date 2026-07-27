@@ -152,11 +152,15 @@
         if (form.dataset.open) { form.innerHTML = ''; form.dataset.open = ''; return; }
         form.dataset.open = '1';
         form.innerHTML = `<div class="row" style="margin-top:8px"><input class="grow re-input" placeholder="답글 입력"><button class="btn-sm re-send">등록</button></div>`;
-        form.querySelector('.re-send').addEventListener('click', async () => {
+        const reBtn = form.querySelector('.re-send');
+        let reSending = false;
+        reBtn.addEventListener('click', async () => {
+          if (reSending) return;
           const val = form.querySelector('.re-input').value.trim();
           if (!val) return;
+          reSending = true; reBtn.disabled = true; reBtn.textContent = '등록 중…';
           try { await api.post(`/api/posts/${id}/comments`, { content: val, parent_id: +cid }); await load(); }
-          catch (err) { showMsg(document.getElementById('cmsg'), err.message); }
+          catch (err) { showMsg(document.getElementById('cmsg'), err.message); reSending = false; reBtn.disabled = false; reBtn.textContent = '등록'; }
         });
       }));
     }
@@ -174,9 +178,15 @@
       card.scrollIntoView({ behavior: 'smooth' });
     }
 
+    let commenting = false;
     document.getElementById('commentForm').addEventListener('submit', async (e) => {
       e.preventDefault();
+      if (commenting) return;                 // 중복 등록 방지
       const input = document.getElementById('commentInput');
+      if (!input.value.trim()) return;
+      commenting = true;
+      const btn = e.target.querySelector('button[type=submit]');
+      if (btn) { btn.disabled = true; btn.textContent = '등록 중…'; }
       try {
         const r = await api.post(`/api/posts/${id}/comments`, { content: input.value });
         input.value = '';
@@ -184,6 +194,7 @@
         else document.getElementById('cmsg').classList.add('hidden');
         await load();
       } catch (err) { showMsg(document.getElementById('cmsg'), err.message); }
+      finally { commenting = false; if (btn) { btn.disabled = false; btn.textContent = '등록'; } }
     });
 
     await load();
