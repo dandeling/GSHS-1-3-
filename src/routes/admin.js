@@ -12,7 +12,7 @@ router.get('/audit', requireAdmin, async (req, res) => {
   const total = (await db.prepare('SELECT COUNT(*) c FROM audit_logs').get()).c;
   const rows = await db.prepare(`
     SELECT a.id, a.entity_type, a.action, a.snapshot, a.created_at,
-           u.username, u.realname
+           a.user_id, u.username, u.realname, u.role AS actor_role, u.status AS actor_status
     FROM audit_logs a LEFT JOIN users u ON u.id = a.user_id
     ORDER BY a.id DESC LIMIT ? OFFSET ?
   `).all(PAGE, (page - 1) * PAGE);

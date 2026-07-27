@@ -138,7 +138,37 @@
       if (p.content) inner += `<div class="audit-content">${esc(p.content)}</div>`;
       if (!p.title && !p.content && p.label) inner += `<div class="audit-content">${esc(p.label)}</div>`;
       if (!p.title && !p.content && !p.label) inner += `<div class="muted">표시할 상세 내용이 없어요.</div>`;
+
+      // 이 작업을 한 사람에게 바로 벌점 부과 (운영자·시스템·강퇴 계정 제외)
+      const removed = ['kicked', 'rejected', 'withdrawn'];
+      const canPenalize = l.user_id && l.actor_role !== 'admin' && !removed.includes(l.actor_status);
+      inner += `<div class="audit-penalty" id="penaltyBox">`;
+      if (canPenalize) {
+        inner += `<button class="btn-sm" id="penalizeBtn" style="background:var(--danger);color:#fff">⚠️ ${esc(l.username)} 님에게 벌점 +1</button>
+          <span class="muted" id="penaltyMsg" style="margin-left:8px;font-size:12px"></span>`;
+      } else if (l.actor_role === 'admin') {
+        inner += `<span class="muted" style="font-size:12px">운영자에게는 벌점을 줄 수 없어요.</span>`;
+      } else if (!l.user_id) {
+        inner += `<span class="muted" style="font-size:12px">시스템 기록이라 벌점 대상이 없어요.</span>`;
+      } else {
+        inner += `<span class="muted" style="font-size:12px">이미 강퇴·탈퇴한 회원이에요.</span>`;
+      }
+      inner += `</div>`;
+
       document.getElementById('modalBody').innerHTML = inner;
+      const pb = document.getElementById('penalizeBtn');
+      if (pb) pb.addEventListener('click', async () => {
+        if (!confirm(`${l.username} 님에게 벌점 +1을 부과할까요?\n(누적 3점=1일 정지 / 6점=1주 정지 / 9점=강퇴)`)) return;
+        pb.disabled = true;
+        const pm = document.getElementById('penaltyMsg');
+        try {
+          const r = await api.post(`/api/admin/users/${l.user_id}/add-demerit`);
+          const S = { active: '활동중', suspended: '정지', kicked: '강퇴' };
+          const extra = r.demerit >= 9 ? ' → 강퇴 처리' : r.demerit >= 6 ? ' → 1주 정지' : r.demerit >= 3 ? ' → 1일 정지' : '';
+          pm.style.color = 'var(--danger)';
+          pm.textContent = `벌점 부과 완료 (누적 ${r.demerit}점 · ${S[r.status] || r.status})${extra}`;
+        } catch (e) { pb.disabled = false; pm.textContent = e.message; }
+      });
       modalBg.classList.remove('hidden');
     }
     function closeModal() { modalBg.classList.add('hidden'); }
@@ -173,6 +203,7 @@
     .audit-deleted-tag { display:inline-block; margin-top:12px; font-size:12px; font-weight:700; color:#c0392b; background:#fdeaea; padding:3px 9px; border-radius:6px; }
     :root[data-theme="dark"] .audit-deleted-tag { background:#3a2020; color:#e88; }
     .audit-content { white-space:pre-wrap; font-size:15px; line-height:1.6; margin-top:8px; word-break:break-word; }
+    .audit-penalty { margin-top:18px; padding-top:14px; border-top:1px solid var(--line); }
   </style>
 </body>
 </html>
