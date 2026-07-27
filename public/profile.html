@@ -84,7 +84,7 @@
 
       const tagName = (c) => { const t = meta.tags.find((x)=>x.code===c); return t?`${t.emoji} ${t.name}`:''; };
       const subName = (c) => { const x = meta.subjects.find((y)=>y.code===c); return x?x.name:''; };
-      document.getElementById('posts').innerHTML = d.posts.length ? renderDcTable(d.posts.map((p)=>({...p, author: u.username, author_point: u.point, author_role: u.role})), tagName, subName) : '<div class="empty">작성한 글이 없어요.</div>';
+      document.getElementById('posts').innerHTML = d.posts.length ? renderDcTable(d.posts.map((p)=>({...p, author: u.username, author_point: u.point, author_role: u.role})), tagName, subName, d.posts.length) : '<div class="empty">작성한 글이 없어요.</div>';
 
       // 내 프로필이면 계정 설정 노출
       if (d.isMe) {

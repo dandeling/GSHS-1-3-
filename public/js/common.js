@@ -202,8 +202,10 @@ export function nextLevelInfo(point) {
 
 // 디시인사이드 스타일 게시판 표 렌더링
 // subjName(code) 를 넘기면 자료게시판 과목명을 말머리로 표시
-export function renderDcTable(posts, tagName, subjName) {
+// startNo: 첫 행에 매길 번호(내림차순). 넘기면 삭제로 인한 번호 공백 없이 순서대로 표시.
+export function renderDcTable(posts, tagName, subjName, startNo) {
   if (!posts.length) return `<div class="empty">글이 없어요. 첫 글을 남겨보세요!</div>`;
+  let seq = (typeof startNo === 'number') ? startNo : null;
   const rows = posts.map((p) => {
     let head = '';
     if (p.board === 'notice') head = '';
@@ -211,7 +213,7 @@ export function renderDcTable(posts, tagName, subjName) {
     else if (p.tag && tagName) { const n = tagName(p.tag); if (n) head = `<span class="tag-chip">${esc(n)}</span> `; }
     const noCell = p.board === 'notice'
       ? `<span class="notice-badge">공지</span>`
-      : p.id;
+      : (seq !== null ? seq-- : p.id);
     const cmt = p.comment_count > 0 ? `<span class="cmt">[${p.comment_count}]</span>` : '';
     const lv = levelOf(p.author_point);
     const lvIcon = p.author_role === 'admin' ? '👑' : lv.emoji;
