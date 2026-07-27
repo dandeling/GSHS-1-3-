@@ -1,5 +1,5 @@
 import express from 'express';
-import db from '../db.js';
+import db, { logAudit } from '../db.js';
 import { requireAuth, requireAdmin } from '../middleware.js';
 
 const router = express.Router();
@@ -23,12 +23,15 @@ router.post('/', requireAdmin, async (req, res) => {
   if (!slot?.trim() || !content?.trim()) return res.status(400).json({ error: '구분과 내용을 입력하세요.' });
   const info = await db.prepare('INSERT INTO special_schedule (sched_date, slot, content) VALUES (?, ?, ?)')
     .run(sched_date, slot.trim().slice(0, 20), content.trim().slice(0, 100));
+  await logAudit('special', info.lastInsertRowid, 'create', JSON.stringify({ label: `${sched_date} ${slot.trim()} · ${content.trim()}` }), req.user.id);
   res.json({ ok: true, id: info.lastInsertRowid });
 });
 
 // 삭제 (관리자)
 router.delete('/:id', requireAdmin, async (req, res) => {
+  const s = await db.prepare('SELECT sched_date, slot, content FROM special_schedule WHERE id=?').get(req.params.id);
   await db.prepare('DELETE FROM special_schedule WHERE id=?').run(req.params.id);
+  if (s) await logAudit('special', req.params.id, 'delete', JSON.stringify({ label: `${s.sched_date} ${s.slot} · ${s.content}` }), req.user.id);
   res.json({ ok: true });
 });
 

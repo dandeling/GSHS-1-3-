@@ -1,5 +1,5 @@
 import express from 'express';
-import db from '../db.js';
+import db, { logAudit } from '../db.js';
 import { requireAuth, requireAdmin } from '../middleware.js';
 
 const router = express.Router();
@@ -45,12 +45,15 @@ router.post('/', requireAdmin, async (req, res) => {
   for (let i = 0; i < opts.length; i++) {
     await db.prepare('INSERT INTO weekly_poll_options (poll_id, idx, text) VALUES (?, ?, ?)').run(info.lastInsertRowid, i, opts[i]);
   }
+  await logAudit('weekly_poll', info.lastInsertRowid, 'create', JSON.stringify({ label: `주간투표 시작 · ${question.trim()}` }), req.user.id);
   res.json({ ok: true, id: info.lastInsertRowid });
 });
 
 // 현재 투표 종료 (관리자)
 router.post('/close', requireAdmin, async (req, res) => {
+  const cur = await db.prepare('SELECT id, question FROM weekly_polls WHERE active=1 ORDER BY id DESC LIMIT 1').get();
   await db.prepare('UPDATE weekly_polls SET active=0 WHERE active=1').run();
+  if (cur) await logAudit('weekly_poll', cur.id, 'update', JSON.stringify({ label: `주간투표 종료 · ${cur.question}` }), req.user.id);
   res.json({ ok: true });
 });
 

@@ -103,6 +103,7 @@ export async function renderNav(opts = {}) {
     <a class="sb-link" href="/timetable.html"><span class="e">🕐</span> 시간표</a>
     <a class="sb-link" href="/special.html"><span class="e">🌙</span> 8교시·야간</a>
     ${me && me.role === 'admin' ? '<a class="sb-link" href="/admin.html"><span class="e">🛠️</span> 관리자 페이지</a>' : ''}
+    ${me && me.role === 'admin' ? '<a class="sb-link" href="/audit.html"><span class="e">📋</span> 전체 기록</a>' : ''}
     <div class="sb-div"></div>
     <a class="sb-link" href="/info.html?p=about"><span class="e">🏫</span> 학교 소개</a>
     <a class="sb-link" href="/info.html?p=rules"><span class="e">📜</span> 이용 안내 · 규칙</a>
@@ -129,6 +130,7 @@ export async function renderNav(opts = {}) {
         <a class="cm-link" href="/timetable.html">🕐 시간표</a>
         <a class="cm-link" href="/special.html">🌙 8교시·야간</a>
         ${me.role === 'admin' ? '<a class="cm-link" href="/admin.html">🛠️ 관리자</a>' : ''}
+        ${me.role === 'admin' ? '<a class="cm-link" href="/audit.html">📋 전체 기록</a>' : ''}
       </div>
       <div class="cm-box">
         <div class="cm-title">${esc(me.username)} 님</div>

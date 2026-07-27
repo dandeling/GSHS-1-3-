@@ -1,5 +1,5 @@
 import express from 'express';
-import db from '../db.js';
+import db, { logAudit } from '../db.js';
 import { requireAuth, requireAdmin } from '../middleware.js';
 
 const router = express.Router();
@@ -31,6 +31,7 @@ router.post('/', requireAdmin, async (req, res) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(event_date)) return res.status(400).json({ error: '날짜 형식(YYYY-MM-DD)을 확인하세요.' });
   const info = await db.prepare('INSERT INTO events (title, description, event_date, author_id) VALUES (?, ?, ?, ?)')
     .run(title.trim(), description?.trim() || null, event_date, req.user.id);
+  await logAudit('event', info.lastInsertRowid, 'create', JSON.stringify({ label: `${event_date} · ${title.trim()}` }), req.user.id);
   res.json({ ok: true, id: info.lastInsertRowid });
 });
 
@@ -42,12 +43,15 @@ router.put('/:id', requireAdmin, async (req, res) => {
   if (!title?.trim() || !event_date) return res.status(400).json({ error: '제목과 날짜를 입력하세요.' });
   await db.prepare('UPDATE events SET title=?, description=?, event_date=? WHERE id=?')
     .run(title.trim(), description?.trim() || null, event_date, req.params.id);
+  await logAudit('event', req.params.id, 'update', JSON.stringify({ label: `${event_date} · ${title.trim()}` }), req.user.id);
   res.json({ ok: true });
 });
 
 // 삭제 (관리자만)
 router.delete('/:id', requireAdmin, async (req, res) => {
+  const ev = await db.prepare('SELECT title, event_date FROM events WHERE id=?').get(req.params.id);
   await db.prepare('DELETE FROM events WHERE id=?').run(req.params.id);
+  if (ev) await logAudit('event', req.params.id, 'delete', JSON.stringify({ label: `${ev.event_date} · ${ev.title}` }), req.user.id);
   res.json({ ok: true });
 });
 
