@@ -33,7 +33,7 @@
       box.innerHTML = d.ranking.map((u, i) => `
         <div class="rank-row ${i<3?'top'+(i+1):''}" onclick="location.href='/profile.html?u=${encodeURIComponent(u.username).replace(/'/g,'%27')}'" style="cursor:pointer">
           <div class="rk">${i<3?medal[i]:(i+1)}</div>
-          <div class="rn">${esc(u.username)} ${levelBadge(u.point, u.role)}</div>
+          <div class="rn">${esc(u.username)} ${levelBadge(u.point, u.role, u.rank)}</div>
           <div class="rs">${u.score}${UNIT[by]}</div>
         </div>`).join('');
     }

@@ -78,7 +78,7 @@ export async function renderNav(opts = {}) {
   const ni = me ? nextLevelInfo(me.point) : null;
   const userBox = me
     ? `<div class="sb-user">
-        <div class="row" style="gap:6px"><b>${esc(me.username)}</b> ${levelBadge(me.point, me.role)}
+        <div class="row" style="gap:6px"><b>${esc(me.username)}</b> ${levelBadge(me.point, me.role, me.rank)}
           ${me.demerit > 0 ? `<span class="badge demerit">벌점 ${me.demerit}</span>` : ''}</div>
         ${me.role !== 'admin' ? `<div class="lv-bar"><div class="lv-bar-in" style="width:${ni.next ? Math.min(100, Math.round((me.point-ni.cur.min)/(ni.next.min-ni.cur.min)*100)) : 100}%"></div></div>
           <div class="muted" style="font-size:11px;margin-top:3px">활동점수 ${me.point}점 ${ni.next ? `· 다음 등급(${ni.next.emoji}${ni.next.name})까지 ${ni.remain}점` : '· 최고 등급!'}</div>` : ''}
@@ -104,6 +104,7 @@ export async function renderNav(opts = {}) {
     <a class="sb-link" href="/special.html"><span class="e">🌙</span> 8교시·야간</a>
     ${me && me.role === 'admin' ? '<a class="sb-link" href="/admin.html"><span class="e">🛠️</span> 관리자 페이지</a>' : ''}
     ${me && me.role === 'admin' ? '<a class="sb-link" href="/audit.html"><span class="e">📋</span> 전체 기록</a>' : ''}
+    ${me && me.role === 'admin' ? '<a class="sb-link" href="/reports.html"><span class="e">🚨</span> 신고함 <span class="badge demerit hidden" id="reportBadge" style="margin-left:4px"></span></a>' : ''}
     <div class="sb-div"></div>
     <a class="sb-link" href="/info.html?p=about"><span class="e">🏫</span> 학교 소개</a>
     <a class="sb-link" href="/info.html?p=rules"><span class="e">📜</span> 이용 안내 · 규칙</a>
@@ -131,10 +132,11 @@ export async function renderNav(opts = {}) {
         <a class="cm-link" href="/special.html">🌙 8교시·야간</a>
         ${me.role === 'admin' ? '<a class="cm-link" href="/admin.html">🛠️ 관리자</a>' : ''}
         ${me.role === 'admin' ? '<a class="cm-link" href="/audit.html">📋 전체 기록</a>' : ''}
+        ${me.role === 'admin' ? '<a class="cm-link" href="/reports.html">🚨 신고함</a>' : ''}
       </div>
       <div class="cm-box">
         <div class="cm-title">${esc(me.username)} 님</div>
-        <div style="margin:4px 0">${levelBadge(me.point, me.role)}</div>
+        <div style="margin:4px 0">${levelBadge(me.point, me.role, me.rank)}</div>
         ${me.role !== 'admin' ? `<div class="muted" style="font-size:11px">활동점수 ${me.point}점</div>` : ''}
         <a class="cm-link" href="/info.html?p=levels" style="margin-top:6px">🌱 등급 안내</a>
       </div>`;
@@ -159,6 +161,14 @@ export async function renderNav(opts = {}) {
         if (dot) dot.classList.toggle('hidden', (c.total || 0) === 0);
         if (dot && c.total > 0) dot.textContent = c.total > 9 ? '9+' : c.total;
       } catch {}
+      // 관리자: 미처리 신고 배지
+      if (me.role === 'admin') {
+        try {
+          const r = await api.get('/api/admin/reports/count');
+          const rb = document.getElementById('reportBadge');
+          if (rb) { rb.classList.toggle('hidden', (r.count || 0) === 0); if (r.count > 0) rb.textContent = r.count; }
+        } catch {}
+      }
     };
     refreshBadge();
     setInterval(refreshBadge, 30000);
@@ -213,8 +223,9 @@ const LEVELS = [
   { min: 0,   emoji: '🌱', name: '씨앗' },
 ];
 export function levelOf(point) { return LEVELS.find((l) => (point || 0) >= l.min) || LEVELS[LEVELS.length - 1]; }
-// 등급 뱃지 HTML. role='admin' 이면 운영자 뱃지
-export function levelBadge(point, role) {
+// 등급 뱃지 HTML. 커스텀 등급(관리자 지정) > 운영자 > 자동 등급 순.
+export function levelBadge(point, role, rank) {
+  if (rank) return `<span class="lv lv-custom" title="관리자 지정 등급">⭐ ${esc(rank)}</span>`;
   if (role === 'admin') return `<span class="lv lv-admin" title="운영자">👑 운영자</span>`;
   const l = levelOf(point);
   return `<span class="lv" title="활동점수 ${point||0}점">${l.emoji} ${l.name}</span>`;
@@ -244,11 +255,12 @@ export function renderDcTable(posts, tagName, subjName, startNo) {
       : (seq !== null ? seq-- : p.id);
     const cmt = p.comment_count > 0 ? `<span class="cmt">[${p.comment_count}]</span>` : '';
     const lv = levelOf(p.author_point);
-    const lvIcon = p.author_role === 'admin' ? '👑' : lv.emoji;
+    const lvIcon = p.author_rank ? '⭐' : (p.author_role === 'admin' ? '👑' : lv.emoji);
+    const lvName = p.author_rank ? p.author_rank : (p.author_role === 'admin' ? '운영자' : lv.name);
     return `<tr class="${p.board==='notice'?'is-notice':''}" onclick="location.href='/post.html?id=${p.id}'">
       <td class="c-no">${noCell}</td>
       <td class="c-subj">${head}<span class="subj-title">${esc(p.title)}</span>${p.has_attach ? ' <span title="첨부파일">📎</span>' : ''}${cmt}</td>
-      <td class="c-user"><span class="lv-dot" title="${p.author_role==='admin'?'운영자':lv.name}">${lvIcon}</span><span class="clickable-user" onclick="event.stopPropagation();location.href='/profile.html?u=${encodeURIComponent(p.author).replace(/'/g, '%27')}'">${esc(p.author)}</span></td>
+      <td class="c-user"><span class="lv-dot" title="${esc(lvName)}">${lvIcon}</span><span class="clickable-user" onclick="event.stopPropagation();location.href='/profile.html?u=${encodeURIComponent(p.author).replace(/'/g, '%27')}'">${esc(p.author)}</span></td>
       <td class="c-date">${fmt(p.created_at)}</td>
       <td class="c-num c-views">${p.views}</td>
       <td class="c-num c-reco"><span class="reco">${p.like_count}</span></td>

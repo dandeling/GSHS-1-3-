@@ -84,7 +84,7 @@ router.get('/', requireAuth, async (req, res) => {
   const rows = await db.prepare(`
     SELECT c.id, c.content, c.created_at, c.author_id,
            CASE WHEN u.status IN ('kicked','rejected','withdrawn') THEN '삭제된 사람' ELSE u.username END AS author,
-           u.point AS author_point, u.role AS author_role
+           u.point AS author_point, u.role AS author_role, u.custom_rank AS author_rank
     FROM chats c JOIN users u ON u.id = c.author_id
     WHERE c.deleted_at IS NULL AND c.room_id = ? AND c.id > ?
     ORDER BY c.id ASC LIMIT 200

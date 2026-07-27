@@ -56,7 +56,7 @@
         const div = document.createElement('div');
         div.className = 'chat-msg' + (m.author_id === me.id ? ' mine' : '');
         const canDel = m.author_id === me.id || me.role === 'admin';
-        div.innerHTML = `${levelBadge(m.author_point, m.author_role)} <span class="who">${esc(m.author)}</span><span class="time">${fmt(m.created_at)}</span>
+        div.innerHTML = `${levelBadge(m.author_point, m.author_role, m.author_rank)} <span class="who">${esc(m.author)}</span><span class="time">${fmt(m.created_at)}</span>
           ${canDel ? `<a href="#" class="muted" style="font-size:11px;margin-left:6px" data-del="${m.id}">삭제</a>` : ''}
           <div><span class="chat-bubble">${esc(m.content)}</span></div>`;
         box.appendChild(div);

@@ -336,6 +336,7 @@ th { color: var(--muted); font-size: 12px; font-weight: 700; }
 .lv { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 999px;
   background: color-mix(in srgb, var(--green) 14%, var(--card)); color: var(--green); white-space: nowrap; }
 .lv-admin { background: color-mix(in srgb, var(--warn) 18%, var(--card)); color: var(--warn); }
+.lv-custom { background: color-mix(in srgb, #a855f7 20%, var(--card)); color: #a855f7; }
 .lv-dot { margin-right: 3px; font-size: 12px; }
 .lv-bar { height: 6px; border-radius: 999px; background: var(--line); overflow: hidden; margin-top: 8px; }
 .lv-bar-in { height: 100%; background: var(--green); border-radius: 999px; }

@@ -116,16 +116,52 @@ router.post('/register', async (req, res) => {
   res.json({ ok: true, message: '가입 신청 완료! 관리자 승인 후 이용할 수 있습니다.' });
 });
 
+// 로그인 시도 제한: 5회 실패부터 잠금(5·10·15…분, 최대 60분)
+const LOGIN_MAX = 5;
+async function recordLoginFail(key) {
+  const r = await db.prepare('SELECT fails FROM login_attempts WHERE login_key=?').get(key);
+  const fails = (r?.fails || 0) + 1;
+  const lockMin = fails >= LOGIN_MAX ? Math.min(60, 5 * (fails - LOGIN_MAX + 1)) : 0;
+  if (lockMin > 0) {
+    await db.prepare(`INSERT INTO login_attempts (login_key, fails, locked_until, updated_at)
+      VALUES (?, ?, datetime('now', ?), datetime('now'))
+      ON CONFLICT(login_key) DO UPDATE SET fails=excluded.fails, locked_until=excluded.locked_until, updated_at=datetime('now')`)
+      .run(key, fails, `+${lockMin} minutes`);
+  } else {
+    await db.prepare(`INSERT INTO login_attempts (login_key, fails, locked_until, updated_at)
+      VALUES (?, ?, NULL, datetime('now'))
+      ON CONFLICT(login_key) DO UPDATE SET fails=excluded.fails, locked_until=NULL, updated_at=datetime('now')`)
+      .run(key, fails);
+  }
+  return { fails, lockMin };
+}
+
 // 로그인 (별명 또는 이메일 + 비밀번호 + 캡차 + (설정 시) 2단계 인증)
 router.post('/login', async (req, res) => {
   const { login, password, captchaToken, captchaAnswer, totpCode } = req.body || {};
   if (!login || !password) return res.status(400).json({ error: '아이디와 비밀번호를 입력하세요.' });
   if (!verifyCaptcha(captchaToken, captchaAnswer)) return res.status(400).json({ error: '자동입력 방지 답이 올바르지 않아요. 다시 시도해주세요.' });
 
+  // 잠금 여부 확인 (식별자 기준)
+  const key = String(login).trim().toLowerCase().slice(0, 120);
+  const att = await db.prepare('SELECT locked_until FROM login_attempts WHERE login_key=?').get(key);
+  if (att?.locked_until) {
+    const until = new Date(att.locked_until.replace(' ', 'T') + 'Z');
+    if (until > new Date()) {
+      const mins = Math.max(1, Math.ceil((until - Date.now()) / 60000));
+      return res.status(429).json({ error: `비밀번호를 여러 번 틀려 로그인이 잠겼어요. 약 ${mins}분 후 다시 시도하세요.` });
+    }
+  }
+
   const user = await db.prepare('SELECT * FROM users WHERE username=? OR email=?').get(login, login);
   if (!user || !bcrypt.compareSync(password, user.password)) {
-    return res.status(401).json({ error: '아이디 또는 비밀번호가 올바르지 않습니다.' });
+    const info = await recordLoginFail(key);
+    if (info.lockMin > 0) return res.status(429).json({ error: `비밀번호를 여러 번 틀려 약 ${info.lockMin}분간 로그인이 잠겼어요.` });
+    const left = LOGIN_MAX - info.fails;
+    return res.status(401).json({ error: `아이디 또는 비밀번호가 올바르지 않습니다.${left > 0 ? ` (${left}회 더 틀리면 잠김)` : ''}` });
   }
+  // 비밀번호 정답 → 실패 기록 초기화
+  await db.prepare('DELETE FROM login_attempts WHERE login_key=?').run(key);
   if (user.status === 'suspended' && user.suspended_until && new Date(user.suspended_until) <= new Date()) {
     await db.prepare("UPDATE users SET status='active', suspended_until=NULL WHERE id=?").run(user.id);
     user.status = 'active';
@@ -276,7 +312,7 @@ router.post('/change-password', requireAuth, async (req, res) => {
 
 // 화면 노출용 사용자 정보 (실명 제외)
 export function publicUser(u) {
-  return { id: u.id, username: u.username, role: u.role, status: u.status, demerit: u.demerit, grade: u.grade, point: u.point || 0 };
+  return { id: u.id, username: u.username, role: u.role, status: u.status, demerit: u.demerit, grade: u.grade, point: u.point || 0, rank: u.custom_rank || null };
 }
 
 export default router;

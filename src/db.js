@@ -125,12 +125,24 @@ CREATE TABLE IF NOT EXISTS special_schedule (
   id INTEGER PRIMARY KEY AUTOINCREMENT, sched_date TEXT NOT NULL, slot TEXT NOT NULL, content TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+-- 로그인 시도 제한 (무차별 대입 방지): 로그인 식별자별 실패 횟수·잠금 시각
+CREATE TABLE IF NOT EXISTS login_attempts (
+  login_key TEXT PRIMARY KEY, fails INTEGER NOT NULL DEFAULT 0, locked_until TEXT,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+-- 게시글·댓글 신고
+CREATE TABLE IF NOT EXISTS reports (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, target_type TEXT NOT NULL, target_id INTEGER NOT NULL,
+  reporter_id INTEGER NOT NULL, reason TEXT, status TEXT NOT NULL DEFAULT 'open',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')), handled_at TEXT, handler_id INTEGER
+);
 CREATE INDEX IF NOT EXISTS idx_posts_board ON posts(board, subject, category);
 CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(post_id);
 CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_logs(entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_likes_post ON likes(post_id);
 CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, is_read);
 CREATE INDEX IF NOT EXISTS idx_dm_pair ON dm_messages(sender_id, recipient_id);
+CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status, id);
 `);
 
 // 기본 채팅방 시딩
@@ -167,6 +179,8 @@ if (!(await db.prepare('SELECT id FROM chat_rooms LIMIT 1').get())) {
   const cols = (await db.prepare('PRAGMA table_info(users)').all()).map((c) => c.name);
   if (!cols.includes('totp_secret')) await db.prepare('ALTER TABLE users ADD COLUMN totp_secret TEXT').run();
   if (!cols.includes('totp_enabled')) await db.prepare('ALTER TABLE users ADD COLUMN totp_enabled INTEGER NOT NULL DEFAULT 0').run();
+  // 관리자가 자유롭게 지정하는 커스텀 등급(랭킹) — 있으면 자동 등급 대신 표시
+  if (!cols.includes('custom_rank')) await db.prepare('ALTER TABLE users ADD COLUMN custom_rank TEXT').run();
 }
 
 // 회원 익명화: 별명·실명·이메일 리셋(글은 '삭제된 사람' 표시), 원래 이메일은 1주일 재가입 제한
