@@ -134,7 +134,8 @@
           if (u.status !== 'kicked') actions += `<button class="btn-sm btn-danger" data-act="kick" data-id="${u.id}">강퇴</button> `;
           actions += `<button class="btn-sm" style="background:var(--danger);color:#fff" data-act="add-demerit" data-id="${u.id}">벌점+1</button> `;
           actions += `<button class="btn-sm btn-ghost" data-act="reset-demerit" data-id="${u.id}">벌점초기화</button> `;
-          actions += `<button class="btn-sm btn-ghost" data-act="reset-password" data-id="${u.id}">비번초기화</button>`;
+          actions += `<button class="btn-sm btn-ghost" data-act="reset-password" data-id="${u.id}">비번초기화</button> `;
+          actions += `<button class="btn-sm btn-ghost" data-act="reset-2fa" data-id="${u.id}">2FA해제</button>`;
         } else actions = '<span class="muted">—</span>';
         return `<tr>
           <td>${esc(u.username)}<br>${levelBadge(u.point, u.role)}</td>
@@ -150,6 +151,7 @@
         if (act === 'reset-password') { const pw = prompt('임시 비밀번호(6자 이상):'); if (!pw) return; body = { password: pw }; }
         if (act === 'kick' && !confirm('정말 강퇴할까요?')) return;
         if (act === 'reject' && !confirm('가입을 거절할까요?')) return;
+        if (act === 'reset-2fa' && !confirm('이 회원의 2단계 인증을 해제할까요? (분실·잠김 복구용)')) return;
         try {
           const r = await api.post(`/api/admin/users/${id}/${act}`, body);
           if (act === 'add-demerit') {

@@ -6,7 +6,7 @@ export const api = {
     const res = await fetch(url, opt);
     let data = {};
     try { data = await res.json(); } catch {}
-    if (!res.ok) throw new Error(data.error || `요청 실패 (${res.status})`);
+    if (!res.ok) { const e = new Error(data.error || `요청 실패 (${res.status})`); e.data = data; e.status = res.status; throw e; }
     return data;
   },
   get: (u) => api.req('GET', u),
@@ -171,6 +171,32 @@ export function showMsg(el, text, ok = false) {
   el.className = 'msg ' + (ok ? 'ok' : 'err');
   el.textContent = text;
   el.classList.remove('hidden');
+}
+
+// 자동입력 방지(캡차) 위젯. box 안에 문제·입력칸·새로고침을 그리고 토큰/정답 게터를 반환.
+export function captchaWidget(box) {
+  let token = '';
+  async function refresh() {
+    box.innerHTML = '<span class="muted" style="font-size:12px">자동입력 방지 불러오는 중…</span>';
+    try {
+      const d = await api.get('/api/auth/captcha');
+      token = d.token;
+      box.innerHTML = `<label>자동입력 방지 — 아래 계산의 답을 적어주세요</label>
+        <div class="row" style="align-items:center;gap:8px">
+          <span style="font-weight:700;font-size:18px;letter-spacing:1px;padding:6px 12px;background:var(--hover,rgba(0,0,0,0.05));border-radius:8px;white-space:nowrap">${esc(d.question)}</span>
+          <input class="cap-ans grow" inputmode="numeric" autocomplete="off" placeholder="정답" style="max-width:110px" />
+          <button type="button" class="btn-sm btn-ghost cap-refresh" title="새 문제">🔄</button>
+        </div>`;
+      box.querySelector('.cap-refresh').addEventListener('click', refresh);
+    } catch { box.innerHTML = '<span class="muted">자동입력 방지를 불러오지 못했어요. 새로고침 해주세요.</span>'; }
+  }
+  refresh();
+  return {
+    token: () => token,
+    answer: () => (box.querySelector('.cap-ans')?.value || '').trim(),
+    clear: () => { const i = box.querySelector('.cap-ans'); if (i) i.value = ''; },
+    refresh,
+  };
 }
 
 // 태그 코드 → {name, emoji} 캐시

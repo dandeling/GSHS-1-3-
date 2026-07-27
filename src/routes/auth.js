@@ -1,14 +1,35 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 import db, { anonymizeUser } from '../db.js';
 import { SCHOOL_EMAIL_REGEX } from '../constants.js';
-import { issueSession, clearSession, loadUser, requireAuth } from '../middleware.js';
+import { issueSession, clearSession, loadUser, requireAuth, JWT_SECRET } from '../middleware.js';
 import { mailEnabled, sendCodeMail } from '../mailer.js';
+import { generateSecret, verifyTotp, otpauthURL } from '../totp.js';
 
 const router = express.Router();
 
 // 이메일 인증 사용 여부 (프론트에서 UI 분기)
 router.get('/mail-status', (req, res) => res.json({ enabled: mailEnabled() }));
+
+// ===== 자동입력 방지(캡차) — 서버가 계산 문제를 내고 정답을 서명된 토큰에 담아 무상태로 검증 =====
+router.get('/captcha', (req, res) => {
+  let x = Math.floor(Math.random() * 9) + 1;
+  let y = Math.floor(Math.random() * 9) + 1;
+  const plus = Math.random() < 0.5;
+  if (!plus && x < y) { const t = x; x = y; y = t; }   // 뺄셈은 음수 방지
+  const answer = plus ? x + y : x - y;
+  const question = `${x} ${plus ? '+' : '−'} ${y} = ?`;
+  const token = jwt.sign({ cap: answer, k: 'captcha' }, JWT_SECRET, { expiresIn: '5m' });
+  res.json({ question, token });
+});
+
+function verifyCaptcha(token, answer) {
+  try {
+    const p = jwt.verify(String(token || ''), JWT_SECRET);
+    return p.k === 'captcha' && Number(answer) === p.cap;
+  } catch { return false; }
+}
 
 // 인증코드 발송 (purpose: register | reset)
 router.post('/send-code', async (req, res) => {
@@ -61,11 +82,13 @@ async function clearCode(email, purpose) {
 
 // 회원가입
 router.post('/register', async (req, res) => {
-  const { email, username, realname, password } = req.body || {};
+  const { email, username, realname, password, passwordConfirm, captchaToken, captchaAnswer } = req.body || {};
   if (!email || !username || !realname || !password) return res.status(400).json({ error: '모든 항목을 입력하세요.' });
+  if (!verifyCaptcha(captchaToken, captchaAnswer)) return res.status(400).json({ error: '자동입력 방지 답이 올바르지 않아요. 다시 시도해주세요.' });
   const m = String(email).match(SCHOOL_EMAIL_REGEX);
   if (!m) return res.status(400).json({ error: '학교 이메일 형식만 가입 가능합니다. 예) 43gshs-1319@g.gne.go.kr' });
   if (String(password).length < 6) return res.status(400).json({ error: '비밀번호는 6자 이상이어야 합니다.' });
+  if (password !== passwordConfirm) return res.status(400).json({ error: '비밀번호와 비밀번호 확인이 일치하지 않습니다.' });
   const grade = parseInt(m[1], 10);
   const studentId = m[2];
 
@@ -93,10 +116,11 @@ router.post('/register', async (req, res) => {
   res.json({ ok: true, message: '가입 신청 완료! 관리자 승인 후 이용할 수 있습니다.' });
 });
 
-// 로그인 (별명 또는 이메일 + 비밀번호)
+// 로그인 (별명 또는 이메일 + 비밀번호 + 캡차 + (설정 시) 2단계 인증)
 router.post('/login', async (req, res) => {
-  const { login, password } = req.body || {};
+  const { login, password, captchaToken, captchaAnswer, totpCode } = req.body || {};
   if (!login || !password) return res.status(400).json({ error: '아이디와 비밀번호를 입력하세요.' });
+  if (!verifyCaptcha(captchaToken, captchaAnswer)) return res.status(400).json({ error: '자동입력 방지 답이 올바르지 않아요. 다시 시도해주세요.' });
 
   const user = await db.prepare('SELECT * FROM users WHERE username=? OR email=?').get(login, login);
   if (!user || !bcrypt.compareSync(password, user.password)) {
@@ -111,8 +135,45 @@ router.post('/login', async (req, res) => {
   if (user.status === 'kicked')   return res.status(403).json({ error: '강퇴된 계정입니다.' });
   if (user.status === 'suspended') return res.status(403).json({ error: `정지 중입니다. 해제 예정: ${user.suspended_until}` });
 
+  // 2단계 인증(설정된 계정): 비밀번호 확인 후 인증앱 코드 요구
+  if (user.totp_enabled) {
+    if (!totpCode) return res.status(401).json({ twoFactorRequired: true, error: '인증 앱의 6자리 코드를 입력하세요.' });
+    if (!verifyTotp(user.totp_secret, totpCode)) return res.status(401).json({ twoFactorRequired: true, error: '인증 앱 코드가 올바르지 않습니다.' });
+  }
+
   issueSession(res, user);
   res.json({ ok: true, user: publicUser(user) });
+});
+
+// ===== 2단계 인증(TOTP) 관리 =====
+// 상태 조회
+router.get('/2fa/status', requireAuth, (req, res) => res.json({ enabled: !!req.user.totp_enabled }));
+
+// 설정 시작: 새 시크릿 발급(아직 미활성). 인증앱 등록용 키·URI 반환
+router.post('/2fa/setup', requireAuth, async (req, res) => {
+  if (req.user.totp_enabled) return res.status(400).json({ error: '이미 2단계 인증이 켜져 있어요.' });
+  const secret = generateSecret();
+  await db.prepare('UPDATE users SET totp_secret=?, totp_enabled=0 WHERE id=?').run(secret, req.user.id);
+  res.json({ ok: true, secret, otpauth: otpauthURL(secret, req.user.username) });
+});
+
+// 활성화: 인증앱 코드가 맞으면 켜기
+router.post('/2fa/enable', requireAuth, async (req, res) => {
+  const code = String(req.body?.code || '').trim();
+  const u = await db.prepare('SELECT totp_secret FROM users WHERE id=?').get(req.user.id);
+  if (!u.totp_secret) return res.status(400).json({ error: '먼저 2단계 인증 설정을 시작하세요.' });
+  if (!verifyTotp(u.totp_secret, code)) return res.status(400).json({ error: '코드가 올바르지 않아요. 앱의 6자리 숫자를 정확히 입력하세요.' });
+  await db.prepare('UPDATE users SET totp_enabled=1 WHERE id=?').run(req.user.id);
+  res.json({ ok: true, message: '2단계 인증이 켜졌어요.' });
+});
+
+// 해제: 비밀번호 확인 후 끄기
+router.post('/2fa/disable', requireAuth, async (req, res) => {
+  const password = String(req.body?.password || '');
+  const u = await db.prepare('SELECT password FROM users WHERE id=?').get(req.user.id);
+  if (!bcrypt.compareSync(password, u.password)) return res.status(400).json({ error: '비밀번호가 올바르지 않습니다.' });
+  await db.prepare('UPDATE users SET totp_enabled=0, totp_secret=NULL WHERE id=?').run(req.user.id);
+  res.json({ ok: true, message: '2단계 인증을 껐어요.' });
 });
 
 // 로그아웃
