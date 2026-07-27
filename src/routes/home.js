@@ -38,7 +38,7 @@ router.get('/', requireAuth, async (req, res) => {
   const popular = await db.prepare(`
     SELECT p.id, p.board, p.tag, p.title,
            CASE WHEN u.status IN ('kicked','rejected','withdrawn') THEN '삭제된 사람' ELSE u.username END AS author,
-           u.point AS author_point, u.role AS author_role, p.views,
+           u.point AS author_point, u.role AS author_role, u.custom_rank AS author_rank, p.views,
            (SELECT COUNT(*) FROM likes l WHERE l.post_id=p.id) AS like_count,
            (SELECT COUNT(*) FROM comments c WHERE c.post_id=p.id AND c.deleted_at IS NULL) AS comment_count
     FROM posts p JOIN users u ON u.id=p.author_id
@@ -49,7 +49,7 @@ router.get('/', requireAuth, async (req, res) => {
   `).all();
 
   const hallOfFame = await db.prepare(`
-    SELECT u.username AS author, u.point AS author_point, u.role AS author_role,
+    SELECT u.username AS author, u.point AS author_point, u.role AS author_role, u.custom_rank AS author_rank,
            COUNT(DISTINCT p.id) AS post_count,
            (SELECT COUNT(*) FROM likes l JOIN posts p2 ON p2.id=l.post_id
              WHERE p2.author_id=u.id AND strftime('%Y-%m', p2.created_at)=strftime('%Y-%m','now')) AS like_count

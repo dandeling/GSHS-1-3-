@@ -60,7 +60,7 @@ router.get('/', requireAuth, async (req, res) => {
   const rows = await db.prepare(`
     SELECT p.id, p.board, p.tag, p.subject, p.category, p.title, p.views, p.created_at, p.updated_at,
            (p.attachment IS NOT NULL) AS has_attach,
-           ${AUTHOR}, u.point AS author_point, u.role AS author_role,
+           ${AUTHOR}, u.point AS author_point, u.role AS author_role, u.custom_rank AS author_rank,
            (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id AND c.deleted_at IS NULL) AS comment_count,
            (SELECT COUNT(*) FROM likes l WHERE l.post_id = p.id) AS like_count
     FROM posts p JOIN users u ON u.id = p.author_id
@@ -75,7 +75,7 @@ router.get('/', requireAuth, async (req, res) => {
 // 단건 조회 (조회수 +1) + 댓글 + 투표 + 반응
 router.get('/:id', requireAuth, async (req, res) => {
   const post = await db.prepare(`
-    SELECT p.*, ${AUTHOR}, u.point AS author_point, u.role AS author_role
+    SELECT p.*, ${AUTHOR}, u.point AS author_point, u.role AS author_role, u.custom_rank AS author_rank
     FROM posts p JOIN users u ON u.id = p.author_id
     WHERE p.id = ? AND p.deleted_at IS NULL
   `).get(req.params.id);
@@ -85,7 +85,7 @@ router.get('/:id', requireAuth, async (req, res) => {
   post.views += 1;
 
   const comments = await db.prepare(`
-    SELECT c.id, c.content, c.created_at, c.author_id, c.parent_id, ${AUTHOR}, u.point AS author_point, u.role AS author_role
+    SELECT c.id, c.content, c.created_at, c.author_id, c.parent_id, ${AUTHOR}, u.point AS author_point, u.role AS author_role, u.custom_rank AS author_rank
     FROM comments c JOIN users u ON u.id = c.author_id
     WHERE c.post_id = ? AND c.deleted_at IS NULL
     ORDER BY c.id ASC
@@ -289,6 +289,31 @@ router.delete('/comments/:cid', requireAuth, async (req, res) => {
   await logAudit('comment', c.id, 'delete', c.content, req.user.id);
   await db.prepare("UPDATE comments SET deleted_at=datetime('now') WHERE id=?").run(c.id);
   res.json({ ok: true });
+});
+
+// ---- 신고 ----
+async function createReport(targetType, targetId, authorId, reporter, reason, res) {
+  if (authorId === reporter.id) return res.status(400).json({ error: '본인 것은 신고할 수 없어요.' });
+  const dup = await db.prepare("SELECT id FROM reports WHERE target_type=? AND target_id=? AND reporter_id=? AND status='open'")
+    .get(targetType, targetId, reporter.id);
+  if (dup) return res.status(409).json({ error: '이미 신고한 내용이에요. 관리자 확인을 기다려주세요.' });
+  await db.prepare('INSERT INTO reports (target_type, target_id, reporter_id, reason) VALUES (?, ?, ?, ?)')
+    .run(targetType, targetId, reporter.id, String(reason || '').trim().slice(0, 300) || null);
+  res.json({ ok: true, message: '신고가 접수됐어요. 관리자가 확인할게요.' });
+}
+
+// 글 신고
+router.post('/:id/report', requireAuth, async (req, res) => {
+  const post = await db.prepare('SELECT id, author_id FROM posts WHERE id=? AND deleted_at IS NULL').get(req.params.id);
+  if (!post) return res.status(404).json({ error: '글을 찾을 수 없습니다.' });
+  await createReport('post', post.id, post.author_id, req.user, req.body?.reason, res);
+});
+
+// 댓글 신고
+router.post('/comments/:cid/report', requireAuth, async (req, res) => {
+  const c = await db.prepare('SELECT id, author_id FROM comments WHERE id=? AND deleted_at IS NULL').get(req.params.cid);
+  if (!c) return res.status(404).json({ error: '댓글을 찾을 수 없습니다.' });
+  await createReport('comment', c.id, c.author_id, req.user, req.body?.reason, res);
 });
 
 export default router;

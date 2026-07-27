@@ -37,7 +37,7 @@
       box.innerHTML = d.conversations.map((c) => `
         <div class="dm-conv" data-u="${esc(c.username)}">
           <div class="av">${esc(c.username[0]||'?')}</div>
-          <div class="grow"><div class="row" style="gap:6px"><b>${esc(c.username)}</b>${levelBadge(c.point, c.role)}</div>
+          <div class="grow"><div class="row" style="gap:6px"><b>${esc(c.username)}</b>${levelBadge(c.point, c.role, c.rank)}</div>
             <div class="last">${esc(c.last||'')}</div></div>
           ${c.unread>0?`<span class="dm-unread">${c.unread}</span>`:''}
         </div>`).join('');
@@ -51,7 +51,7 @@
       try {
         const d = await api.get('/api/dm/' + encodeURIComponent(uname));
         thread = d;
-        document.getElementById('otherName').innerHTML = `${esc(d.other.username)} ${levelBadge(d.other.point, d.other.role)}`;
+        document.getElementById('otherName').innerHTML = `${esc(d.other.username)} ${levelBadge(d.other.point, d.other.role, d.other.rank)}`;
         renderMsgs(d.messages, d.meId);
       } catch (e) { document.getElementById('box').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
     }

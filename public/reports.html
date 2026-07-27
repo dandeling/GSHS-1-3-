@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>신고함 · 1-3반 커뮤니티</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <main>
+    <div class="card">
+      <h1>🚨 신고함</h1>
+      <p class="muted">회원이 신고한 게시글·댓글이에요. 확인 후 <b>원문 보기 · 삭제 · 작성자 벌점</b>을 주고 <b>처리 완료</b>로 닫아주세요.</p>
+      <div class="pills" id="tabs">
+        <span class="pill active" data-s="open">미처리</span>
+        <span class="pill" data-s="all">전체</span>
+      </div>
+      <div id="msg" class="hidden"></div>
+      <div id="list" style="margin-top:10px"><div class="empty">불러오는 중…</div></div>
+    </div>
+  </main>
+  <script type="module">
+    import { renderNav, api, esc, fmt, showMsg } from '/js/common.js';
+    await renderNav({ requireLogin: true, requireAdmin: true });
+    const msg = document.getElementById('msg');
+    let status = 'open';
+
+    async function load() {
+      const box = document.getElementById('list');
+      box.innerHTML = '<div class="empty">불러오는 중…</div>';
+      const d = await api.get('/api/admin/reports?status=' + status);
+      if (!d.reports.length) { box.innerHTML = '<div class="empty">신고가 없어요.</div>'; return; }
+      box.innerHTML = d.reports.map((r) => {
+        const t = r.target;
+        const gone = !t ? '<span class="muted">(대상을 찾을 수 없음)</span>' : (t.deleted ? '<span class="tag-chip" style="background:#fdeaea;color:#c0392b">이미 삭제됨</span>' : '');
+        const head = t ? `<b>${t.kind}</b> · 작성자 <b>${esc(t.author)}</b>` : '신고 대상';
+        const body = t ? `${t.title ? `<div style="font-weight:600">${esc(t.title)}</div>` : ''}<div class="muted" style="white-space:pre-wrap;font-size:13px">${esc(t.snippet)}${t.snippet.length>=120?'…':''}</div>` : '';
+        const actions = (t && !t.deleted) ? `
+          <a class="btn-sm btn-ghost" href="${t.link}" target="_blank">원문 보기</a>
+          <button class="btn-sm btn-danger" data-act="del" data-kind="${t.kind}" data-tid="${t.id}">${t.kind} 삭제</button>
+          <button class="btn-sm" style="background:var(--danger);color:#fff" data-act="demerit" data-uid="${t.author_id}">작성자 벌점+1</button>` : '';
+        const resolveBtn = r.status === 'open' ? `<button class="btn-sm" data-act="resolve" data-rid="${r.id}">처리 완료</button>` : '<span class="muted" style="font-size:12px">✅ 처리됨</span>';
+        return `<div class="card" style="margin:0 0 10px;border:1px solid var(--line)">
+          <div class="row" style="justify-content:space-between;align-items:flex-start">
+            <div class="grow"><div>${head} ${gone}</div>${body}</div>
+          </div>
+          ${r.reason ? `<div style="margin-top:6px;font-size:13px">📝 사유: ${esc(r.reason)}</div>` : ''}
+          <div class="muted" style="font-size:12px;margin-top:6px">신고자 <b>${esc(r.reporter)}</b>${r.reporter_real?` (${esc(r.reporter_real)})`:''} · ${fmt(r.created_at)}</div>
+          <div class="row" style="margin-top:10px;flex-wrap:wrap;gap:6px">${actions} ${resolveBtn}</div>
+        </div>`;
+      }).join('');
+
+      box.querySelectorAll('button[data-act]').forEach((b) => b.addEventListener('click', async () => {
+        const act = b.dataset.act;
+        try {
+          if (act === 'del') {
+            if (!confirm(`이 ${b.dataset.kind}을(를) 삭제할까요?`)) return;
+            await api.del(b.dataset.kind === '댓글' ? `/api/posts/comments/${b.dataset.tid}` : `/api/posts/${b.dataset.tid}`);
+            showMsg(msg, '삭제했어요.', true);
+          } else if (act === 'demerit') {
+            const r = await api.post(`/api/admin/users/${b.dataset.uid}/add-demerit`);
+            showMsg(msg, `작성자에게 벌점을 부과했어요. (누적 ${r.demerit}점 · ${r.status})`, true);
+          } else if (act === 'resolve') {
+            await api.post(`/api/admin/reports/${b.dataset.rid}/resolve`);
+            showMsg(msg, '신고를 처리 완료로 닫았어요.', true);
+          }
+          await load();
+        } catch (e) { showMsg(msg, e.message); }
+      }));
+    }
+
+    document.querySelectorAll('#tabs .pill').forEach((el) => el.addEventListener('click', () => {
+      document.querySelectorAll('#tabs .pill').forEach((p) => p.classList.remove('active'));
+      el.classList.add('active'); status = el.dataset.s; load();
+    }));
+    load();
+  </script>
+</body>
+</html>

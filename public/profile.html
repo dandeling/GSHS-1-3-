@@ -70,7 +70,7 @@
         <div class="profile-head">
           <div class="profile-avatar">${esc(u.username[0]||'?')}</div>
           <div class="grow">
-            <div class="row" style="gap:8px"><h1 style="margin:0">${esc(u.username)}</h1>${levelBadge(u.point, u.role)}</div>
+            <div class="row" style="gap:8px"><h1 style="margin:0">${esc(u.username)}</h1>${levelBadge(u.point, u.role, u.rank)}</div>
             ${u.realname ? `<div class="muted" style="font-size:13px">실명: <b>${esc(u.realname)}</b> ${d.isMe ? '' : '<span style="font-size:11px">(관리자만 표시)</span>'}</div>` : ''}
             <div class="muted">가입 ${joined.getFullYear()}.${joined.getMonth()+1}.${joined.getDate()}
               ${u.role==='admin'?'· 운영자':`· 활동점수 ${u.point}점 ${ni.next?`(다음 ${ni.next.emoji}${ni.next.name}까지 ${ni.remain}점)`:''}`}</div>
@@ -89,7 +89,7 @@
 
       const tagName = (c) => { const t = meta.tags.find((x)=>x.code===c); return t?`${t.emoji} ${t.name}`:''; };
       const subName = (c) => { const x = meta.subjects.find((y)=>y.code===c); return x?x.name:''; };
-      document.getElementById('posts').innerHTML = d.posts.length ? renderDcTable(d.posts.map((p)=>({...p, author: u.username, author_point: u.point, author_role: u.role})), tagName, subName, d.posts.length) : '<div class="empty">작성한 글이 없어요.</div>';
+      document.getElementById('posts').innerHTML = d.posts.length ? renderDcTable(d.posts.map((p)=>({...p, author: u.username, author_point: u.point, author_role: u.role, author_rank: u.rank})), tagName, subName, d.posts.length) : '<div class="empty">작성한 글이 없어요.</div>';
 
       // 내 프로필이면 계정 설정 노출
       if (d.isMe) {

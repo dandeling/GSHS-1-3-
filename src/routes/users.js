@@ -9,19 +9,19 @@ router.get('/ranking', requireAuth, async (req, res) => {
   const by = req.query.by || 'point';
   let rows;
   if (by === 'likes') {
-    rows = await db.prepare(`SELECT u.username, u.point, u.role,
+    rows = await db.prepare(`SELECT u.username, u.point, u.role, u.custom_rank AS rank,
       (SELECT COUNT(*) FROM likes l JOIN posts p ON p.id=l.post_id WHERE p.author_id=u.id) AS score
       FROM users u WHERE u.role!='admin' AND u.status NOT IN ('kicked','rejected','withdrawn') ORDER BY score DESC, u.point DESC LIMIT 20`).all();
   } else if (by === 'attendance') {
-    rows = await db.prepare(`SELECT u.username, u.point, u.role,
+    rows = await db.prepare(`SELECT u.username, u.point, u.role, u.custom_rank AS rank,
       (SELECT COUNT(*) FROM attendance a WHERE a.user_id=u.id) AS score
       FROM users u WHERE u.role!='admin' AND u.status NOT IN ('kicked','rejected','withdrawn') ORDER BY score DESC, u.point DESC LIMIT 20`).all();
   } else if (by === 'posts') {
-    rows = await db.prepare(`SELECT u.username, u.point, u.role,
+    rows = await db.prepare(`SELECT u.username, u.point, u.role, u.custom_rank AS rank,
       (SELECT COUNT(*) FROM posts p WHERE p.author_id=u.id AND p.deleted_at IS NULL) AS score
       FROM users u WHERE u.role!='admin' AND u.status NOT IN ('kicked','rejected','withdrawn') ORDER BY score DESC, u.point DESC LIMIT 20`).all();
   } else {
-    rows = await db.prepare(`SELECT u.username, u.point, u.role, u.point AS score
+    rows = await db.prepare(`SELECT u.username, u.point, u.role, u.custom_rank AS rank, u.point AS score
       FROM users u WHERE u.role!='admin' AND u.status NOT IN ('kicked','rejected','withdrawn') ORDER BY u.point DESC LIMIT 20`).all();
   }
   res.json({ by, ranking: rows });
@@ -29,7 +29,7 @@ router.get('/ranking', requireAuth, async (req, res) => {
 
 // 프로필 조회 (별명 기준)
 router.get('/:username/profile', requireAuth, async (req, res) => {
-  const u = await db.prepare('SELECT id, username, role, point, created_at FROM users WHERE username=?').get(req.params.username);
+  const u = await db.prepare('SELECT id, username, role, point, custom_rank, created_at FROM users WHERE username=?').get(req.params.username);
   if (!u) return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
 
   const postCount = (await db.prepare("SELECT COUNT(*) c FROM posts WHERE author_id=? AND deleted_at IS NULL").get(u.id)).c;
@@ -47,7 +47,7 @@ router.get('/:username/profile', requireAuth, async (req, res) => {
 
   const isMe = u.id === req.user.id;
   const isAdmin = req.user.role === 'admin';
-  const userOut = { username: u.username, role: u.role, point: u.point, created_at: u.created_at };
+  const userOut = { username: u.username, role: u.role, point: u.point, rank: u.custom_rank || null, created_at: u.created_at };
   if (isMe || isAdmin) {
     const full = await db.prepare('SELECT email, realname FROM users WHERE id=?').get(u.id);
     userOut.realname = full.realname;

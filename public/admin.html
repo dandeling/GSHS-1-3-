@@ -133,12 +133,14 @@
           if (u.status === 'suspended' || u.status === 'kicked' || u.status === 'rejected') actions += `<button class="btn-sm" data-act="unsuspend" data-id="${u.id}">활동중으로</button> `;
           if (u.status !== 'kicked') actions += `<button class="btn-sm btn-danger" data-act="kick" data-id="${u.id}">강퇴</button> `;
           actions += `<button class="btn-sm" style="background:var(--danger);color:#fff" data-act="add-demerit" data-id="${u.id}">벌점+1</button> `;
+          actions += `<button class="btn-sm btn-ghost" data-act="set-rank" data-id="${u.id}" data-rank="${esc(u.custom_rank||'')}">등급지정</button> `;
+          actions += `<button class="btn-sm btn-ghost" data-act="set-point" data-id="${u.id}" data-point="${u.point}">점수설정</button> `;
           actions += `<button class="btn-sm btn-ghost" data-act="reset-demerit" data-id="${u.id}">벌점초기화</button> `;
           actions += `<button class="btn-sm btn-ghost" data-act="reset-password" data-id="${u.id}">비번초기화</button> `;
           actions += `<button class="btn-sm btn-ghost" data-act="reset-2fa" data-id="${u.id}">2FA해제</button>`;
         } else actions = '<span class="muted">—</span>';
         return `<tr>
-          <td>${esc(u.username)}<br>${levelBadge(u.point, u.role)}</td>
+          <td>${esc(u.username)}<br>${levelBadge(u.point, u.role, u.custom_rank)} <span class="muted" style="font-size:11px">${u.point}점</span></td>
           <td>${esc(u.realname)}</td><td class="nowrap">${u.grade}기 ${esc(u.student_id)}</td>
           <td class="muted" style="font-size:12px">${esc(u.email)}</td>
           <td class="center">${u.demerit >= 3 ? `<b style="color:var(--danger)">${u.demerit}</b>` : u.demerit}</td>
@@ -149,6 +151,8 @@
         const act = b.dataset.act, id = b.dataset.id; let body;
         if (act === 'suspend') { const days = prompt('정지 일수:', '1'); if (!days) return; body = { days: parseInt(days, 10) }; }
         if (act === 'reset-password') { const pw = prompt('임시 비밀번호(6자 이상):'); if (!pw) return; body = { password: pw }; }
+        if (act === 'set-rank') { const rank = prompt('등급 이름을 마음대로 지정하세요. (예: 반장, 레전드 · 비우면 자동 등급으로 복귀)', b.dataset.rank || ''); if (rank === null) return; body = { rank }; }
+        if (act === 'set-point') { const point = prompt('활동점수(랭킹) 숫자를 입력하세요.', b.dataset.point || '0'); if (point === null) return; body = { point: parseInt(point, 10) || 0 }; }
         if (act === 'kick' && !confirm('정말 강퇴할까요?')) return;
         if (act === 'reject' && !confirm('가입을 거절할까요?')) return;
         if (act === 'reset-2fa' && !confirm('이 회원의 2단계 인증을 해제할까요? (분실·잠김 복구용)')) return;
