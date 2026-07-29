@@ -192,6 +192,13 @@ if (!(await db.prepare('SELECT id FROM chat_rooms LIMIT 1').get())) {
   if (!cols.includes('custom_rank')) await db.prepare('ALTER TABLE users ADD COLUMN custom_rank TEXT').run();
 }
 
+// ---- 마이그레이션: 캘린더 일정 종류 + 기간(종료일) ----
+{
+  const cols = (await db.prepare('PRAGMA table_info(events)').all()).map((c) => c.name);
+  if (!cols.includes('event_type')) await db.prepare("ALTER TABLE events ADD COLUMN event_type TEXT NOT NULL DEFAULT 'event'").run();
+  if (!cols.includes('end_date')) await db.prepare('ALTER TABLE events ADD COLUMN end_date TEXT').run();
+}
+
 // 회원 익명화: 별명·실명·이메일 리셋(글은 '삭제된 사람' 표시), 원래 이메일은 1주일 재가입 제한
 export async function anonymizeUser(id, label) {
   const u = await db.prepare('SELECT email FROM users WHERE id=?').get(id);
