@@ -25,16 +25,47 @@
       <div id="evList"></div>
     </div>
   </main>
+  <!-- 일정 추가·수정 모달 -->
+  <div class="ev-modal-bg hidden" id="evModal">
+    <div class="ev-modal">
+      <div class="row" style="align-items:center"><h2 id="evModalTitle" class="grow" style="margin:0">일정</h2>
+        <button class="icon-btn" id="evClose" style="box-shadow:none">✕</button></div>
+      <div id="evMsg" class="hidden"></div>
+      <div id="evForm">
+        <label>제목</label>
+        <input id="evTitle" maxlength="120" placeholder="일정 제목" />
+        <label>설명 <span class="muted">(선택)</span></label>
+        <textarea id="evDesc" style="min-height:70px" placeholder="설명"></textarea>
+        <label>날짜</label>
+        <input id="evDate" type="date" />
+        <div class="row" style="margin-top:14px">
+          <button id="evSave">저장</button>
+          <button id="evDelete" class="btn-danger hidden">삭제</button>
+          <button id="evCancel" class="btn-ghost">취소</button>
+        </div>
+      </div>
+      <div id="evReadonly" class="hidden">
+        <div style="white-space:pre-wrap;font-size:15px" id="evRoBody"></div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .ev-modal-bg { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:1000; padding:16px; }
+    .ev-modal-bg.hidden { display:none; }
+    .ev-modal { background:var(--card,#fff); color:var(--text); border-radius:14px; max-width:440px; width:100%; padding:20px; box-shadow:0 12px 40px rgba(0,0,0,0.3); }
+  </style>
 
   <script type="module">
-    import { renderNav, api, esc, qs } from '/js/common.js';
+    import { renderNav, api, esc, qs, can, showMsg } from '/js/common.js';
     const me = await renderNav({ requireLogin: true });
-    const isAdmin = me.role === 'admin';
+    // 캘린더 편집 권한: 관리자 또는 'calendar' 권한을 받은 등급
+    const isAdmin = can(me, 'calendar');
     if (isAdmin) {
       document.getElementById('addBtn').classList.remove('hidden');
-      document.getElementById('hint').textContent = '관리자는 날짜 칸을 눌러 일정을 추가할 수 있습니다.';
+      document.getElementById('hint').textContent = '날짜 칸을 눌러 일정을 추가할 수 있어요. 일정을 누르면 수정·삭제할 수 있어요.';
     } else {
-      document.getElementById('hint').textContent = '일정은 관리자만 추가·수정·삭제할 수 있습니다.';
+      document.getElementById('hint').textContent = '일정은 관리자(또는 권한 있는 등급)만 추가·수정·삭제할 수 있습니다.';
     }
 
     const now = new Date();
@@ -84,35 +115,66 @@
       } else { listCard.classList.add('hidden'); }
     }
 
+    // ===== 모달 =====
+    const modal = document.getElementById('evModal');
+    const evMsg = () => document.getElementById('evMsg');
+    let editingId = null;   // null이면 추가 모드
+
+    function closeModal() { modal.classList.add('hidden'); }
+    document.getElementById('evClose').addEventListener('click', closeModal);
+    document.getElementById('evCancel').addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+
+    // 일정 클릭
     function openEvent(e) {
-      let text = `📅 ${e.event_date}\n${e.title}\n\n${e.description || ''}\n\n작성: ${e.author}`;
-      if (isAdmin) {
-        if (confirm(text + '\n\n[확인]=수정  [취소]=닫기')) editEvent(e);
-      } else { alert(text); }
+      if (isAdmin) { openEditor(e); return; }
+      // 편집 권한 없으면 읽기 전용
+      openReadonly(e);
     }
+    function openReadonly(e) {
+      document.getElementById('evForm').classList.add('hidden');
+      document.getElementById('evReadonly').classList.remove('hidden');
+      document.getElementById('evModalTitle').textContent = '일정';
+      document.getElementById('evRoBody').textContent = `📅 ${e.event_date}\n\n${e.title}\n\n${e.description || ''}\n\n작성: ${e.author || ''}`;
+      evMsg().classList.add('hidden');
+      modal.classList.remove('hidden');
+    }
+    // 추가/수정 폼 열기 (e 없으면 추가)
+    function openEditor(e, presetDate) {
+      document.getElementById('evReadonly').classList.add('hidden');
+      document.getElementById('evForm').classList.remove('hidden');
+      evMsg().classList.add('hidden');
+      editingId = e ? e.id : null;
+      document.getElementById('evModalTitle').textContent = e ? '일정 수정' : '일정 추가';
+      document.getElementById('evTitle').value = e ? e.title : '';
+      document.getElementById('evDesc').value = e ? (e.description || '') : '';
+      document.getElementById('evDate').value = e ? e.event_date : (presetDate || `${year}-${String(month).padStart(2, '0')}-01`);
+      document.getElementById('evDelete').classList.toggle('hidden', !e);   // 수정일 때만 삭제 버튼
+      modal.classList.remove('hidden');
+      document.getElementById('evTitle').focus();
+    }
+    function addEvent(date) { openEditor(null, date); }
 
-    async function addEvent(date) {
-      const title = prompt(`[${date}] 일정 제목:`); if (!title) return;
-      const desc = prompt('설명(선택):') || '';
-      await api.post('/api/calendar', { title, description: desc, event_date: date });
-      load();
-    }
-    async function editEvent(e) {
-      const title = prompt('제목:', e.title); if (title === null) return;
-      const desc = prompt('설명:', e.description || '');
-      const date = prompt('날짜(YYYY-MM-DD):', e.event_date); if (!date) return;
-      if (confirm('이 일정을 삭제하려면 [확인], 수정하려면 [취소]')) {
-        await api.del('/api/calendar/' + e.id);
-      } else {
-        await api.put('/api/calendar/' + e.id, { title, description: desc, event_date: date });
-      }
-      load();
-    }
-
-    document.getElementById('addBtn').addEventListener('click', () => {
-      const date = prompt('날짜(YYYY-MM-DD):', `${year}-${String(month).padStart(2, '0')}-01`);
-      if (date) addEvent(date);
+    // 저장(추가 or 수정)
+    document.getElementById('evSave').addEventListener('click', async () => {
+      const title = document.getElementById('evTitle').value.trim();
+      const description = document.getElementById('evDesc').value.trim();
+      const event_date = document.getElementById('evDate').value;
+      if (!title || !event_date) { showMsg(evMsg(), '제목과 날짜를 입력하세요.'); return; }
+      try {
+        if (editingId) await api.put('/api/calendar/' + editingId, { title, description, event_date });
+        else await api.post('/api/calendar', { title, description, event_date });
+        closeModal(); await load();
+      } catch (err) { showMsg(evMsg(), err.message); }
     });
+    // 삭제
+    document.getElementById('evDelete').addEventListener('click', async () => {
+      if (!editingId || !confirm('이 일정을 삭제할까요?')) return;
+      try { await api.del('/api/calendar/' + editingId); closeModal(); await load(); }
+      catch (err) { showMsg(evMsg(), err.message); }
+    });
+
+    document.getElementById('addBtn').addEventListener('click', () => openEditor(null));
     document.getElementById('prev').addEventListener('click', () => { month--; if (month < 1) { month = 12; year--; } load(); });
     document.getElementById('next').addEventListener('click', () => { month++; if (month > 12) { month = 1; year++; } load(); });
 
