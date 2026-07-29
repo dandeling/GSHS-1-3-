@@ -52,10 +52,23 @@ export function toggleTheme() {
 initTheme();
 
 // 상단바 + 사이드바 렌더링
+// 권한 보유 여부 (관리자는 모든 권한 보유)
+export function can(me, ...perms) {
+  if (!me) return false;
+  if (me.role === 'admin') return true;
+  const set = me.perms || [];
+  return perms.some((p) => set.includes(p));
+}
+// 관리 페이지(admin.html) 접근 가능한지 — 관리자 또는 페이지 내 섹션 권한 보유
+export function isStaff(me) {
+  return can(me, 'members', 'meal', 'weekly_poll');
+}
+
 export async function renderNav(opts = {}) {
   const me = await getMe();
   if (opts.requireLogin && !me) { location.href = '/login.html'; return null; }
   if (opts.requireAdmin && (!me || me.role !== 'admin')) { location.href = '/'; return me; }
+  if (opts.requirePerm && !can(me, ...[].concat(opts.requirePerm))) { location.href = '/'; return me; }
 
   // 상단바
   const bar = document.createElement('header');
@@ -102,9 +115,9 @@ export async function renderNav(opts = {}) {
     <a class="sb-link" href="/calendar.html"><span class="e">📅</span> 캘린더</a>
     <a class="sb-link" href="/timetable.html"><span class="e">🕐</span> 시간표</a>
     <a class="sb-link" href="/special.html"><span class="e">🌙</span> 8교시·야간</a>
-    ${me && me.role === 'admin' ? '<a class="sb-link" href="/admin.html"><span class="e">🛠️</span> 관리자 페이지</a>' : ''}
-    ${me && me.role === 'admin' ? '<a class="sb-link" href="/audit.html"><span class="e">📋</span> 전체 기록</a>' : ''}
-    ${me && me.role === 'admin' ? '<a class="sb-link" href="/reports.html"><span class="e">🚨</span> 신고함 <span class="badge demerit hidden" id="reportBadge" style="margin-left:4px"></span></a>' : ''}
+    ${isStaff(me) ? '<a class="sb-link" href="/admin.html"><span class="e">🛠️</span> 관리자 페이지</a>' : ''}
+    ${can(me, 'audit') ? '<a class="sb-link" href="/audit.html"><span class="e">📋</span> 전체 기록</a>' : ''}
+    ${can(me, 'reports') ? '<a class="sb-link" href="/reports.html"><span class="e">🚨</span> 신고함 <span class="badge demerit hidden" id="reportBadge" style="margin-left:4px"></span></a>' : ''}
     <div class="sb-div"></div>
     <a class="sb-link" href="/info.html?p=about"><span class="e">🏫</span> 학교 소개</a>
     <a class="sb-link" href="/info.html?p=rules"><span class="e">📜</span> 이용 안내 · 규칙</a>
@@ -130,9 +143,9 @@ export async function renderNav(opts = {}) {
         <a class="cm-link" href="/calendar.html">📅 캘린더</a>
         <a class="cm-link" href="/timetable.html">🕐 시간표</a>
         <a class="cm-link" href="/special.html">🌙 8교시·야간</a>
-        ${me.role === 'admin' ? '<a class="cm-link" href="/admin.html">🛠️ 관리자</a>' : ''}
-        ${me.role === 'admin' ? '<a class="cm-link" href="/audit.html">📋 전체 기록</a>' : ''}
-        ${me.role === 'admin' ? '<a class="cm-link" href="/reports.html">🚨 신고함</a>' : ''}
+        ${isStaff(me) ? '<a class="cm-link" href="/admin.html">🛠️ 관리자</a>' : ''}
+        ${can(me, 'audit') ? '<a class="cm-link" href="/audit.html">📋 전체 기록</a>' : ''}
+        ${can(me, 'reports') ? '<a class="cm-link" href="/reports.html">🚨 신고함</a>' : ''}
       </div>
       <div class="cm-box">
         <div class="cm-title">${esc(me.username)} 님</div>
@@ -161,8 +174,8 @@ export async function renderNav(opts = {}) {
         if (dot) dot.classList.toggle('hidden', (c.total || 0) === 0);
         if (dot && c.total > 0) dot.textContent = c.total > 9 ? '9+' : c.total;
       } catch {}
-      // 관리자: 미처리 신고 배지
-      if (me.role === 'admin') {
+      // 신고 처리 권한자: 미처리 신고 배지
+      if (can(me, 'reports')) {
         try {
           const r = await api.get('/api/admin/reports/count');
           const rb = document.getElementById('reportBadge');

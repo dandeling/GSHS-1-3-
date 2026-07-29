@@ -1,12 +1,12 @@
 import express from 'express';
 import db, { notify } from '../db.js';
-import { requireAuth, requireAdmin } from '../middleware.js';
+import { requireAuth, requirePerm, hasPerm } from '../middleware.js';
 
 const router = express.Router();
 
 // 내 문의 목록 (관리자는 전체)
 router.get('/', requireAuth, async (req, res) => {
-  const isAdmin = req.user.role === 'admin';
+  const isAdmin = hasPerm(req.user, 'inquiries');
   const rows = isAdmin
     ? await db.prepare(`SELECT i.*, u.username FROM inquiries i JOIN users u ON u.id=i.user_id ORDER BY
         CASE i.status WHEN 'open' THEN 0 ELSE 1 END, i.id DESC`).all()
@@ -15,7 +15,7 @@ router.get('/', requireAuth, async (req, res) => {
 });
 
 // 안읽은(미답변) 문의 개수 — 관리자 배지용
-router.get('/pending-count', requireAdmin, async (req, res) => {
+router.get('/pending-count', requirePerm('inquiries'), async (req, res) => {
   const c = (await db.prepare("SELECT COUNT(*) c FROM inquiries WHERE status='open'").get()).c;
   res.json({ count: c });
 });
@@ -33,13 +33,13 @@ router.post('/', requireAuth, async (req, res) => {
 router.delete('/:id', requireAuth, async (req, res) => {
   const inq = await db.prepare('SELECT * FROM inquiries WHERE id=?').get(req.params.id);
   if (!inq) return res.status(404).json({ error: '문의를 찾을 수 없습니다.' });
-  if (inq.user_id !== req.user.id && req.user.role !== 'admin') return res.status(403).json({ error: '삭제 권한이 없습니다.' });
+  if (inq.user_id !== req.user.id && !hasPerm(req.user, 'inquiries')) return res.status(403).json({ error: '삭제 권한이 없습니다.' });
   await db.prepare('DELETE FROM inquiries WHERE id=?').run(req.params.id);
   res.json({ ok: true });
 });
 
 // 답변 (관리자) → 작성자에게 알림
-router.post('/:id/answer', requireAdmin, async (req, res) => {
+router.post('/:id/answer', requirePerm('inquiries'), async (req, res) => {
   const inq = await db.prepare('SELECT * FROM inquiries WHERE id=?').get(req.params.id);
   if (!inq) return res.status(404).json({ error: '문의를 찾을 수 없습니다.' });
   const { answer } = req.body || {};

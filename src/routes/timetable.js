@@ -1,6 +1,6 @@
 import express from 'express';
 import db, { logAudit } from '../db.js';
-import { requireAuth, requireAdmin } from '../middleware.js';
+import { requireAuth, requirePerm, hasPerm } from '../middleware.js';
 
 const router = express.Router();
 
@@ -12,11 +12,11 @@ router.get('/', requireAuth, async (req, res) => {
   const rows = await db.prepare('SELECT day, period, subject FROM timetable').all();
   const grid = {};
   rows.forEach((r) => { grid[`${r.day}_${r.period}`] = r.subject; });
-  res.json({ days: DAYS, periods: PERIODS, grid, isAdmin: req.user.role === 'admin' });
+  res.json({ days: DAYS, periods: PERIODS, grid, isAdmin: hasPerm(req.user, 'timetable') });
 });
 
 // 시간표 저장 (관리자) — 전체 그리드 upsert
-router.post('/', requireAdmin, async (req, res) => {
+router.post('/', requirePerm('timetable'), async (req, res) => {
   const cells = Array.isArray(req.body?.cells) ? req.body.cells : [];
   for (const c of cells) {
     const day = parseInt(c.day, 10), period = parseInt(c.period, 10);

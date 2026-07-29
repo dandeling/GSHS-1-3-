@@ -1,6 +1,6 @@
 import express from 'express';
 import db, { logAudit, addPoint, notify, notifyMentions } from '../db.js';
-import { requireAuth, addDemerit } from '../middleware.js';
+import { requireAuth, addDemerit, hasPerm } from '../middleware.js';
 import { countBadwords } from '../badwords.js';
 import { BOARDS, SUBJECT_CODES, CATEGORY_CODES, TAG_CODES } from '../constants.js';
 
@@ -166,7 +166,7 @@ router.post('/:id/like', requireAuth, async (req, res) => {
 router.post('/', requireAuth, async (req, res) => {
   const { board, subject, category, tag, title, content, attachment, attachment_name } = req.body || {};
   if (!BOARDS.includes(board)) return res.status(400).json({ error: '게시판을 확인하세요.' });
-  if (board === 'notice' && req.user.role !== 'admin') return res.status(403).json({ error: '공지사항은 관리자만 작성할 수 있습니다.' });
+  if (board === 'notice' && !hasPerm(req.user, 'notice')) return res.status(403).json({ error: '공지사항 작성 권한이 없습니다.' });
   if (!title?.trim() || !content?.trim()) return res.status(400).json({ error: '제목과 내용을 입력하세요.' });
 
   let subj = null, cat = null, tg = null;
@@ -211,7 +211,7 @@ router.post('/', requireAuth, async (req, res) => {
 router.put('/:id', requireAuth, async (req, res) => {
   const post = await db.prepare('SELECT * FROM posts WHERE id=? AND deleted_at IS NULL').get(req.params.id);
   if (!post) return res.status(404).json({ error: '글을 찾을 수 없습니다.' });
-  if (post.author_id !== req.user.id && req.user.role !== 'admin') return res.status(403).json({ error: '수정 권한이 없습니다.' });
+  if (post.author_id !== req.user.id && !hasPerm(req.user, 'moderate')) return res.status(403).json({ error: '수정 권한이 없습니다.' });
   const { title, content, tag } = req.body || {};
   if (!title?.trim() || !content?.trim()) return res.status(400).json({ error: '제목과 내용을 입력하세요.' });
   let tg = post.tag;
@@ -229,7 +229,7 @@ router.put('/:id', requireAuth, async (req, res) => {
 router.delete('/:id', requireAuth, async (req, res) => {
   const post = await db.prepare('SELECT * FROM posts WHERE id=? AND deleted_at IS NULL').get(req.params.id);
   if (!post) return res.status(404).json({ error: '글을 찾을 수 없습니다.' });
-  if (post.author_id !== req.user.id && req.user.role !== 'admin') return res.status(403).json({ error: '삭제 권한이 없습니다.' });
+  if (post.author_id !== req.user.id && !hasPerm(req.user, 'moderate')) return res.status(403).json({ error: '삭제 권한이 없습니다.' });
   await logAudit('post', post.id, 'delete', JSON.stringify({ title: post.title, content: post.content }), req.user.id);
   await db.prepare("UPDATE posts SET deleted_at=datetime('now') WHERE id=?").run(post.id);
   res.json({ ok: true });
@@ -237,7 +237,7 @@ router.delete('/:id', requireAuth, async (req, res) => {
 
 // 흔적 보기 (수정·삭제 이력) — 관리자만
 router.get('/:id/trace', requireAuth, async (req, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ error: '관리자만 흔적을 볼 수 있습니다.' });
+  if (!hasPerm(req.user, 'audit')) return res.status(403).json({ error: '흔적을 볼 권한이 없습니다.' });
   const logs = await db.prepare(`
     SELECT a.id, a.action, a.snapshot, a.created_at, u.username AS actor
     FROM audit_logs a LEFT JOIN users u ON u.id = a.user_id
@@ -285,7 +285,7 @@ router.post('/:id/comments', requireAuth, async (req, res) => {
 router.delete('/comments/:cid', requireAuth, async (req, res) => {
   const c = await db.prepare('SELECT * FROM comments WHERE id=? AND deleted_at IS NULL').get(req.params.cid);
   if (!c) return res.status(404).json({ error: '댓글을 찾을 수 없습니다.' });
-  if (c.author_id !== req.user.id && req.user.role !== 'admin') return res.status(403).json({ error: '삭제 권한이 없습니다.' });
+  if (c.author_id !== req.user.id && !hasPerm(req.user, 'moderate')) return res.status(403).json({ error: '삭제 권한이 없습니다.' });
   await logAudit('comment', c.id, 'delete', c.content, req.user.id);
   await db.prepare("UPDATE comments SET deleted_at=datetime('now') WHERE id=?").run(c.id);
   res.json({ ok: true });

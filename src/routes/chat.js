@@ -1,7 +1,7 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import db, { logAudit } from '../db.js';
-import { requireAuth, addDemerit } from '../middleware.js';
+import { requireAuth, addDemerit, hasPerm } from '../middleware.js';
 import { countBadwords } from '../badwords.js';
 
 const router = express.Router();
@@ -9,7 +9,7 @@ const router = express.Router();
 // 비밀방 접근 권한: 공개방이거나, 개설자/관리자이거나, 멤버면 true
 async function canAccess(room, user) {
   if (!room.is_private) return true;
-  if (user.role === 'admin' || room.created_by === user.id) return true;
+  if (hasPerm(user, 'moderate') || room.created_by === user.id) return true;
   return !!(await db.prepare('SELECT 1 FROM room_members WHERE room_id=? AND user_id=?').get(room.id, user.id));
 }
 
@@ -67,7 +67,7 @@ router.delete('/rooms/:id', requireAuth, async (req, res) => {
   const room = await db.prepare('SELECT * FROM chat_rooms WHERE id=?').get(req.params.id);
   if (!room) return res.status(404).json({ error: '방을 찾을 수 없습니다.' });
   if (room.id === 1) return res.status(400).json({ error: '기본 채팅방은 삭제할 수 없습니다.' });
-  if (room.created_by !== req.user.id && req.user.role !== 'admin') return res.status(403).json({ error: '삭제 권한이 없습니다.' });
+  if (room.created_by !== req.user.id && !hasPerm(req.user, 'moderate')) return res.status(403).json({ error: '삭제 권한이 없습니다.' });
   await db.prepare('DELETE FROM chats WHERE room_id=?').run(room.id);
   await db.prepare('DELETE FROM room_members WHERE room_id=?').run(room.id);
   await db.prepare('DELETE FROM chat_rooms WHERE id=?').run(room.id);
@@ -118,7 +118,7 @@ router.post('/', requireAuth, async (req, res) => {
 router.delete('/:id', requireAuth, async (req, res) => {
   const msg = await db.prepare('SELECT * FROM chats WHERE id=? AND deleted_at IS NULL').get(req.params.id);
   if (!msg) return res.status(404).json({ error: '메시지를 찾을 수 없습니다.' });
-  if (msg.author_id !== req.user.id && req.user.role !== 'admin') return res.status(403).json({ error: '삭제 권한이 없습니다.' });
+  if (msg.author_id !== req.user.id && !hasPerm(req.user, 'moderate')) return res.status(403).json({ error: '삭제 권한이 없습니다.' });
   await logAudit('chat', msg.id, 'delete', msg.content, req.user.id);
   await db.prepare("UPDATE chats SET deleted_at=datetime('now') WHERE id=?").run(msg.id);
   res.json({ ok: true });

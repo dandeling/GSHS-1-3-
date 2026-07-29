@@ -1,6 +1,6 @@
 import express from 'express';
 import db, { logAudit } from '../db.js';
-import { requireAuth, requireAdmin } from '../middleware.js';
+import { requireAuth, requirePerm, hasPerm } from '../middleware.js';
 
 const router = express.Router();
 
@@ -19,7 +19,7 @@ async function loadPoll(poll, userId) {
 // 현재 활성 주간투표
 router.get('/', requireAuth, async (req, res) => {
   const poll = await db.prepare('SELECT * FROM weekly_polls WHERE active=1 ORDER BY id DESC LIMIT 1').get();
-  res.json({ poll: await loadPoll(poll, req.user.id), isAdmin: req.user.role === 'admin' });
+  res.json({ poll: await loadPoll(poll, req.user.id), isAdmin: hasPerm(req.user, 'weekly_poll') });
 });
 
 // 투표하기 (1인 1표, 변경 가능)
@@ -34,7 +34,7 @@ router.post('/vote', requireAuth, async (req, res) => {
 });
 
 // 새 주간투표 시작 (관리자) — 기존 활성 투표는 자동 종료
-router.post('/', requireAdmin, async (req, res) => {
+router.post('/', requirePerm('weekly_poll'), async (req, res) => {
   const { question, options } = req.body || {};
   if (!question?.trim()) return res.status(400).json({ error: '투표 질문을 입력하세요.' });
   const opts = Array.isArray(options) ? options.map((o) => String(o).trim()).filter(Boolean).slice(0, 8) : [];
@@ -50,7 +50,7 @@ router.post('/', requireAdmin, async (req, res) => {
 });
 
 // 현재 투표 종료 (관리자)
-router.post('/close', requireAdmin, async (req, res) => {
+router.post('/close', requirePerm('weekly_poll'), async (req, res) => {
   const cur = await db.prepare('SELECT id, question FROM weekly_polls WHERE active=1 ORDER BY id DESC LIMIT 1').get();
   await db.prepare('UPDATE weekly_polls SET active=0 WHERE active=1').run();
   if (cur) await logAudit('weekly_poll', cur.id, 'update', JSON.stringify({ label: `주간투표 종료 · ${cur.question}` }), req.user.id);

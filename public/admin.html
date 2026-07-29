@@ -8,9 +8,10 @@
 </head>
 <body>
   <main>
-    <div class="card">
-      <h1>🛠️ 관리자 페이지</h1>
-      <!-- 오늘의 급식 관리 -->
+    <div class="card"><h1>🛠️ 관리자 페이지</h1><p class="muted" id="roleHint"></p></div>
+
+    <!-- 급식·D-day (meal) -->
+    <div class="card hidden" id="cardMeal">
       <label>🍽️ 오늘의 급식</label>
       <textarea id="mealInput" style="min-height:90px" placeholder="오늘 급식 메뉴를 입력하세요 (비우고 저장하면 삭제)"></textarea>
       <div class="row" style="margin-top:8px"><button id="mealSave" class="btn-sm">급식 저장</button><span id="mealMsg" class="muted"></span></div>
@@ -19,7 +20,10 @@
       <label>📅 D-day 관리</label>
       <div class="row"><input id="ddayTitle" class="grow" placeholder="예: 중간고사" style="flex:2"><input id="ddayDate" type="date" style="flex:1"><button id="ddayAdd" class="btn-sm">추가</button></div>
       <div id="ddayList" style="margin-top:10px"></div>
-      <hr />
+    </div>
+
+    <!-- 이주의 투표 (weekly_poll) -->
+    <div class="card hidden" id="cardWp">
       <label>🗳️ 이주의 투표</label>
       <div id="wpCurrent" class="muted" style="margin-bottom:8px"></div>
       <input id="wpQ" placeholder="투표 질문 (예: 이번 주 급식 뭐가 젤 좋아?)" maxlength="100" />
@@ -29,11 +33,13 @@
         <button id="wpStart" class="btn-sm">투표 시작</button>
         <button id="wpClose" class="btn-sm btn-danger">현재 투표 종료</button>
       </div>
-      <hr />
+    </div>
+
+    <!-- 회원 관리 (members) -->
+    <div class="card hidden" id="cardMembers">
       <label>🚫 재가입 제한 (탈퇴·추방 후 1주일)</label>
       <div id="rejoinList" class="muted" style="font-size:13px">불러오는 중…</div>
-    </div>
-    <div class="card">
+      <hr />
       <h2>회원 관리</h2>
       <div class="pills" id="filterTabs">
         <span class="pill active" data-f="">전체</span>
@@ -50,129 +56,179 @@
         </table>
       </div>
     </div>
+
+    <!-- 등급별 권한 (관리자 전용) -->
+    <div class="card hidden" id="cardPerms">
+      <h2>🎖️ 등급별 권한</h2>
+      <p class="muted" style="font-size:13px">커스텀 등급(예: 반장·운영진)에 관리자 권한을 골라 부여하세요. 그 등급을 가진 회원은 아래 체크한 작업을 할 수 있어요. (회원에게 등급은 회원관리의 <b>등급지정</b>으로 부여)</p>
+      <div id="permMsg" class="hidden"></div>
+      <div id="permBody"><div class="empty">불러오는 중…</div></div>
+    </div>
   </main>
+
   <script type="module">
-    import { renderNav, api, esc, showMsg, levelBadge } from '/js/common.js';
-    await renderNav({ requireLogin: true, requireAdmin: true });
+    import { renderNav, api, esc, showMsg, levelBadge, can, isStaff } from '/js/common.js';
+    const me = await renderNav({ requireLogin: true });
+    if (!isStaff(me)) { location.href = '/'; }
     const msg = document.getElementById('msg');
-    let filter = '';
     const STATUS_KO = { pending: '승인대기', active: '활동중', suspended: '정지', rejected: '거절', kicked: '강퇴' };
+    const isAdminUser = me.role === 'admin';
+    document.getElementById('roleHint').textContent = isAdminUser
+      ? '운영자 계정 — 모든 관리 권한을 가지고 있어요.'
+      : '등급 권한으로 접근했어요. 부여된 권한의 기능만 보여요.';
 
-    // 급식
-    try { const h = await api.get('/api/home'); if (h.meal) document.getElementById('mealInput').value = h.meal.content; } catch {}
-    document.getElementById('mealSave').addEventListener('click', async () => {
-      try { await api.post('/api/home/meal', { content: document.getElementById('mealInput').value }); document.getElementById('mealMsg').textContent = '저장됨 ✓'; }
-      catch (e) { document.getElementById('mealMsg').textContent = e.message; }
-    });
-
-    // D-day
-    async function loadDdays() {
-      const d = await api.get('/api/home/ddays');
-      document.getElementById('ddayList').innerHTML = d.ddays.length
-        ? d.ddays.map((x) => `<div class="row" style="justify-content:space-between;border-bottom:1px solid var(--line);padding:6px 0">
-            <span><b>${esc(x.title)}</b> <span class="muted">${x.target_date} · ${x.dleft<0?'지남':(x.dleft===0?'D-DAY':'D-'+x.dleft)}</span></span>
-            <button class="btn-sm btn-danger" data-dd="${x.id}">삭제</button></div>`).join('')
-        : '<span class="muted">등록된 D-day가 없어요.</span>';
-      document.querySelectorAll('[data-dd]').forEach((b) => b.addEventListener('click', async () => { await api.del('/api/home/ddays/' + b.dataset.dd); loadDdays(); }));
+    // ===== 급식·D-day (meal) =====
+    if (can(me, 'meal')) {
+      document.getElementById('cardMeal').classList.remove('hidden');
+      try { const h = await api.get('/api/home'); if (h.meal) document.getElementById('mealInput').value = h.meal.content; } catch {}
+      document.getElementById('mealSave').addEventListener('click', async () => {
+        try { await api.post('/api/home/meal', { content: document.getElementById('mealInput').value }); document.getElementById('mealMsg').textContent = '저장됨 ✓'; }
+        catch (e) { document.getElementById('mealMsg').textContent = e.message; }
+      });
+      const loadDdays = async () => {
+        const d = await api.get('/api/home/ddays');
+        document.getElementById('ddayList').innerHTML = d.ddays.length
+          ? d.ddays.map((x) => `<div class="row" style="justify-content:space-between;border-bottom:1px solid var(--line);padding:6px 0">
+              <span><b>${esc(x.title)}</b> <span class="muted">${x.target_date} · ${x.dleft<0?'지남':(x.dleft===0?'D-DAY':'D-'+x.dleft)}</span></span>
+              <button class="btn-sm btn-danger" data-dd="${x.id}">삭제</button></div>`).join('')
+          : '<span class="muted">등록된 D-day가 없어요.</span>';
+        document.querySelectorAll('[data-dd]').forEach((b) => b.addEventListener('click', async () => { await api.del('/api/home/ddays/' + b.dataset.dd); loadDdays(); }));
+      };
+      document.getElementById('ddayAdd').addEventListener('click', async () => {
+        const title = document.getElementById('ddayTitle').value.trim();
+        const date = document.getElementById('ddayDate').value;
+        if (!title || !date) return;
+        try { await api.post('/api/home/ddays', { title, target_date: date }); document.getElementById('ddayTitle').value=''; loadDdays(); }
+        catch (e) { alert(e.message); }
+      });
+      loadDdays();
     }
-    document.getElementById('ddayAdd').addEventListener('click', async () => {
-      const title = document.getElementById('ddayTitle').value.trim();
-      const date = document.getElementById('ddayDate').value;
-      if (!title || !date) return;
-      try { await api.post('/api/home/ddays', { title, target_date: date }); document.getElementById('ddayTitle').value=''; loadDdays(); }
-      catch (e) { showMsg(msg, e.message); }
-    });
-    loadDdays();
 
-    // 이주의 투표
-    const wpOpts = document.getElementById('wpOpts');
-    const addWpOpt = (v='') => { const d = document.createElement('div'); d.className='poll-add-opt'; d.innerHTML = `<input class="grow wp-o" placeholder="선택지" maxlength="60" value="${v}"><button type="button" class="btn-ghost btn-sm rm">✕</button>`; d.querySelector('.rm').addEventListener('click',()=>d.remove()); wpOpts.appendChild(d); };
-    addWpOpt(); addWpOpt();
-    document.getElementById('wpAddOpt').addEventListener('click', () => { if (wpOpts.children.length < 8) addWpOpt(); });
-    async function loadWp() {
-      try { const d = await api.get('/api/weekly-poll'); document.getElementById('wpCurrent').textContent = d.poll ? `진행 중: "${d.poll.question}" (총 ${d.poll.total}표)` : '진행 중인 투표 없음'; } catch {}
+    // ===== 이주의 투표 (weekly_poll) =====
+    if (can(me, 'weekly_poll')) {
+      document.getElementById('cardWp').classList.remove('hidden');
+      const wpOpts = document.getElementById('wpOpts');
+      const addWpOpt = (v='') => { const d = document.createElement('div'); d.className='poll-add-opt'; d.innerHTML = `<input class="grow wp-o" placeholder="선택지" maxlength="60" value="${v}"><button type="button" class="btn-ghost btn-sm rm">✕</button>`; d.querySelector('.rm').addEventListener('click',()=>d.remove()); wpOpts.appendChild(d); };
+      addWpOpt(); addWpOpt();
+      document.getElementById('wpAddOpt').addEventListener('click', () => { if (wpOpts.children.length < 8) addWpOpt(); });
+      const loadWp = async () => { try { const d = await api.get('/api/weekly-poll'); document.getElementById('wpCurrent').textContent = d.poll ? `진행 중: "${d.poll.question}" (총 ${d.poll.total}표)` : '진행 중인 투표 없음'; } catch {} };
+      document.getElementById('wpStart').addEventListener('click', async () => {
+        const question = document.getElementById('wpQ').value.trim();
+        const options = [...document.querySelectorAll('.wp-o')].map((i)=>i.value.trim()).filter(Boolean);
+        try { await api.post('/api/weekly-poll', { question, options }); alert('이주의 투표를 시작했어요!'); document.getElementById('wpQ').value=''; loadWp(); }
+        catch (e) { alert(e.message); }
+      });
+      document.getElementById('wpClose').addEventListener('click', async () => {
+        if (!confirm('현재 투표를 종료할까요?')) return;
+        try { await api.post('/api/weekly-poll/close'); alert('투표를 종료했어요.'); loadWp(); } catch (e) { alert(e.message); }
+      });
+      loadWp();
     }
-    document.getElementById('wpStart').addEventListener('click', async () => {
-      const question = document.getElementById('wpQ').value.trim();
-      const options = [...document.querySelectorAll('.wp-o')].map((i)=>i.value.trim()).filter(Boolean);
-      try { await api.post('/api/weekly-poll', { question, options }); showMsg(msg, '이주의 투표를 시작했어요!', true); document.getElementById('wpQ').value=''; loadWp(); }
-      catch (e) { showMsg(msg, e.message); }
-    });
-    document.getElementById('wpClose').addEventListener('click', async () => {
-      if (!confirm('현재 투표를 종료할까요?')) return;
-      try { await api.post('/api/weekly-poll/close'); showMsg(msg, '투표를 종료했어요.', true); loadWp(); } catch (e) { showMsg(msg, e.message); }
-    });
-    loadWp();
 
-    // 재가입 제한 목록
-    async function loadRejoin() {
-      try {
-        const d = await api.get('/api/admin/rejoin-blocks');
-        const box = document.getElementById('rejoinList');
-        if (!d.blocks.length) { box.textContent = '제한 중인 이메일이 없어요.'; return; }
-        box.innerHTML = d.blocks.map((b) => `<div class="row" style="justify-content:space-between;border-bottom:1px solid var(--line);padding:6px 0">
-          <span>${esc(b.email)} <span class="muted">(${esc(b.until.slice(0,10))}까지)</span></span>
-          <button class="btn-sm" data-email="${esc(b.email)}">즉시 재가입 허용</button></div>`).join('');
-        box.querySelectorAll('[data-email]').forEach((btn) => btn.addEventListener('click', async () => {
-          await api.post('/api/admin/rejoin-allow', { email: btn.dataset.email }); showMsg(msg, '재가입을 허용했어요.', true); loadRejoin();
-        }));
-      } catch {}
-    }
-    loadRejoin();
-
-    async function load() {
-      const d = await api.get('/api/admin/users' + (filter ? '?status=' + filter : ''));
-      const list = document.getElementById('list');
-      if (!d.users.length) { list.innerHTML = `<tr><td colspan="7" class="center muted" style="padding:24px">회원이 없습니다.</td></tr>`; return; }
-      list.innerHTML = d.users.map((u) => {
-        const isAdmin = u.role === 'admin';
-        let actions = '';
-        if (!isAdmin) {
-          if (u.status === 'pending') actions += `<button class="btn-sm" data-act="approve" data-id="${u.id}">승인</button> <button class="btn-sm btn-danger" data-act="reject" data-id="${u.id}">거절</button> `;
-          if (u.status === 'active') actions += `<button class="btn-sm btn-ghost" data-act="suspend" data-id="${u.id}">정지</button> `;
-          if (u.status === 'suspended' || u.status === 'kicked' || u.status === 'rejected') actions += `<button class="btn-sm" data-act="unsuspend" data-id="${u.id}">활동중으로</button> `;
-          if (u.status !== 'kicked') actions += `<button class="btn-sm btn-danger" data-act="kick" data-id="${u.id}">강퇴</button> `;
-          actions += `<button class="btn-sm" style="background:var(--danger);color:#fff" data-act="add-demerit" data-id="${u.id}">벌점+1</button> `;
-          actions += `<button class="btn-sm btn-ghost" data-act="set-rank" data-id="${u.id}" data-rank="${esc(u.custom_rank||'')}">등급지정</button> `;
-          actions += `<button class="btn-sm btn-ghost" data-act="set-point" data-id="${u.id}" data-point="${u.point}">점수설정</button> `;
-          actions += `<button class="btn-sm btn-ghost" data-act="reset-demerit" data-id="${u.id}">벌점초기화</button> `;
-          actions += `<button class="btn-sm btn-ghost" data-act="reset-password" data-id="${u.id}">비번초기화</button> `;
-          actions += `<button class="btn-sm btn-ghost" data-act="reset-2fa" data-id="${u.id}">2FA해제</button>`;
-        } else actions = '<span class="muted">—</span>';
-        return `<tr>
-          <td>${esc(u.username)}<br>${levelBadge(u.point, u.role, u.custom_rank)} <span class="muted" style="font-size:11px">${u.point}점</span></td>
-          <td>${esc(u.realname)}</td><td class="nowrap">${u.grade}기 ${esc(u.student_id)}</td>
-          <td class="muted" style="font-size:12px">${esc(u.email)}</td>
-          <td class="center">${u.demerit >= 3 ? `<b style="color:var(--danger)">${u.demerit}</b>` : u.demerit}</td>
-          <td class="nowrap">${STATUS_KO[u.status] || u.status}</td><td>${actions}</td>
-        </tr>`;
-      }).join('');
-      list.querySelectorAll('button[data-act]').forEach((b) => b.addEventListener('click', async () => {
-        const act = b.dataset.act, id = b.dataset.id; let body;
-        if (act === 'suspend') { const days = prompt('정지 일수:', '1'); if (!days) return; body = { days: parseInt(days, 10) }; }
-        if (act === 'reset-password') { const pw = prompt('임시 비밀번호(6자 이상):'); if (!pw) return; body = { password: pw }; }
-        if (act === 'set-rank') { const rank = prompt('등급 이름을 마음대로 지정하세요. (예: 반장, 레전드 · 비우면 자동 등급으로 복귀)', b.dataset.rank || ''); if (rank === null) return; body = { rank }; }
-        if (act === 'set-point') { const point = prompt('활동점수(랭킹) 숫자를 입력하세요.', b.dataset.point || '0'); if (point === null) return; body = { point: parseInt(point, 10) || 0 }; }
-        if (act === 'kick' && !confirm('정말 강퇴할까요?')) return;
-        if (act === 'reject' && !confirm('가입을 거절할까요?')) return;
-        if (act === 'reset-2fa' && !confirm('이 회원의 2단계 인증을 해제할까요? (분실·잠김 복구용)')) return;
+    // ===== 회원 관리 (members) =====
+    if (can(me, 'members')) {
+      document.getElementById('cardMembers').classList.remove('hidden');
+      let filter = '';
+      const loadRejoin = async () => {
         try {
-          const r = await api.post(`/api/admin/users/${id}/${act}`, body);
-          if (act === 'add-demerit') {
-            const S = { active: '활동중', suspended: '정지', kicked: '강퇴' };
-            const extra = r.demerit >= 9 ? ' → 9점 강퇴 처리' : r.demerit >= 6 ? ' → 6점 1주 정지' : r.demerit >= 3 ? ' → 3점 1일 정지' : '';
-            showMsg(msg, `벌점 부여 완료 (누적 ${r.demerit}점 · ${S[r.status] || r.status})${extra}`, true);
-          } else showMsg(msg, '처리되었습니다.', true);
-          await load();
-        } catch (err) { showMsg(msg, err.message); }
+          const d = await api.get('/api/admin/rejoin-blocks');
+          const box = document.getElementById('rejoinList');
+          if (!d.blocks.length) { box.textContent = '제한 중인 이메일이 없어요.'; return; }
+          box.innerHTML = d.blocks.map((b) => `<div class="row" style="justify-content:space-between;border-bottom:1px solid var(--line);padding:6px 0">
+            <span>${esc(b.email)} <span class="muted">(${esc(b.until.slice(0,10))}까지)</span></span>
+            <button class="btn-sm" data-email="${esc(b.email)}">즉시 재가입 허용</button></div>`).join('');
+          box.querySelectorAll('[data-email]').forEach((btn) => btn.addEventListener('click', async () => {
+            await api.post('/api/admin/rejoin-allow', { email: btn.dataset.email }); showMsg(msg, '재가입을 허용했어요.', true); loadRejoin();
+          }));
+        } catch {}
+      };
+      loadRejoin();
+
+      const load = async () => {
+        const d = await api.get('/api/admin/users' + (filter ? '?status=' + filter : ''));
+        const list = document.getElementById('list');
+        if (!d.users.length) { list.innerHTML = `<tr><td colspan="7" class="center muted" style="padding:24px">회원이 없습니다.</td></tr>`; return; }
+        list.innerHTML = d.users.map((u) => {
+          const admin = u.role === 'admin';
+          let actions = '';
+          if (!admin) {
+            if (u.status === 'pending') actions += `<button class="btn-sm" data-act="approve" data-id="${u.id}">승인</button> <button class="btn-sm btn-danger" data-act="reject" data-id="${u.id}">거절</button> `;
+            if (u.status === 'active') actions += `<button class="btn-sm btn-ghost" data-act="suspend" data-id="${u.id}">정지</button> `;
+            if (u.status === 'suspended' || u.status === 'kicked' || u.status === 'rejected') actions += `<button class="btn-sm" data-act="unsuspend" data-id="${u.id}">활동중으로</button> `;
+            if (u.status !== 'kicked') actions += `<button class="btn-sm btn-danger" data-act="kick" data-id="${u.id}">강퇴</button> `;
+            actions += `<button class="btn-sm" style="background:var(--danger);color:#fff" data-act="add-demerit" data-id="${u.id}">벌점+1</button> `;
+            // 등급·점수 지정은 운영자 전용
+            if (isAdminUser) {
+              actions += `<button class="btn-sm btn-ghost" data-act="set-rank" data-id="${u.id}" data-rank="${esc(u.custom_rank||'')}">등급지정</button> `;
+              actions += `<button class="btn-sm btn-ghost" data-act="set-point" data-id="${u.id}" data-point="${u.point}">점수설정</button> `;
+            }
+            actions += `<button class="btn-sm btn-ghost" data-act="reset-demerit" data-id="${u.id}">벌점초기화</button> `;
+            actions += `<button class="btn-sm btn-ghost" data-act="reset-password" data-id="${u.id}">비번초기화</button> `;
+            actions += `<button class="btn-sm btn-ghost" data-act="reset-2fa" data-id="${u.id}">2FA해제</button>`;
+          } else actions = '<span class="muted">—</span>';
+          return `<tr>
+            <td>${esc(u.username)}<br>${levelBadge(u.point, u.role, u.custom_rank)} <span class="muted" style="font-size:11px">${u.point}점</span></td>
+            <td>${esc(u.realname)}</td><td class="nowrap">${u.grade}기 ${esc(u.student_id)}</td>
+            <td class="muted" style="font-size:12px">${esc(u.email)}</td>
+            <td class="center">${u.demerit >= 3 ? `<b style="color:var(--danger)">${u.demerit}</b>` : u.demerit}</td>
+            <td class="nowrap">${STATUS_KO[u.status] || u.status}</td><td>${actions}</td>
+          </tr>`;
+        }).join('');
+        list.querySelectorAll('button[data-act]').forEach((b) => b.addEventListener('click', async () => {
+          const act = b.dataset.act, id = b.dataset.id; let body;
+          if (act === 'suspend') { const days = prompt('정지 일수:', '1'); if (!days) return; body = { days: parseInt(days, 10) }; }
+          if (act === 'reset-password') { const pw = prompt('임시 비밀번호(6자 이상):'); if (!pw) return; body = { password: pw }; }
+          if (act === 'set-rank') { const rank = prompt('등급 이름을 마음대로 지정하세요. (예: 반장, 레전드 · 비우면 자동 등급으로 복귀)', b.dataset.rank || ''); if (rank === null) return; body = { rank }; }
+          if (act === 'set-point') { const point = prompt('활동점수(랭킹) 숫자를 입력하세요.', b.dataset.point || '0'); if (point === null) return; body = { point: parseInt(point, 10) || 0 }; }
+          if (act === 'kick' && !confirm('정말 강퇴할까요?')) return;
+          if (act === 'reject' && !confirm('가입을 거절할까요?')) return;
+          if (act === 'reset-2fa' && !confirm('이 회원의 2단계 인증을 해제할까요? (분실·잠김 복구용)')) return;
+          try {
+            const r = await api.post(`/api/admin/users/${id}/${act}`, body);
+            if (act === 'add-demerit') {
+              const S = { active: '활동중', suspended: '정지', kicked: '강퇴' };
+              const extra = r.demerit >= 9 ? ' → 9점 강퇴 처리' : r.demerit >= 6 ? ' → 6점 1주 정지' : r.demerit >= 3 ? ' → 3점 1일 정지' : '';
+              showMsg(msg, `벌점 부여 완료 (누적 ${r.demerit}점 · ${S[r.status] || r.status})${extra}`, true);
+            } else if (act === 'set-rank') { showMsg(msg, '등급을 변경했어요. (권한은 "등급별 권한"에서 설정)', true); loadPerms?.(); }
+            else showMsg(msg, '처리되었습니다.', true);
+            await load();
+          } catch (err) { showMsg(msg, err.message); }
+        }));
+      };
+      document.querySelectorAll('#filterTabs .pill').forEach((a) => a.addEventListener('click', () => {
+        document.querySelectorAll('#filterTabs .pill').forEach((x) => x.classList.remove('active'));
+        a.classList.add('active'); filter = a.dataset.f; load();
       }));
+      await load();
     }
 
-    document.querySelectorAll('#filterTabs .pill').forEach((a) => a.addEventListener('click', () => {
-      document.querySelectorAll('#filterTabs .pill').forEach((x) => x.classList.remove('active'));
-      a.classList.add('active'); filter = a.dataset.f; load();
-    }));
-    await load();
+    // ===== 등급별 권한 (관리자 전용) =====
+    let loadPerms = null;
+    if (isAdminUser) {
+      document.getElementById('cardPerms').classList.remove('hidden');
+      const pm = document.getElementById('permMsg');
+      loadPerms = async () => {
+        const d = await api.get('/api/admin/permissions');
+        const body = document.getElementById('permBody');
+        if (!d.ranks.length) { body.innerHTML = '<div class="empty">아직 커스텀 등급이 없어요. 회원관리에서 <b>등급지정</b>으로 등급을 먼저 부여하세요.</div>'; return; }
+        body.innerHTML = d.ranks.map((r) => `
+          <div class="card" style="border:1px solid var(--line);margin:0 0 10px">
+            <div class="row" style="justify-content:space-between"><b>⭐ ${esc(r.rank)}</b>
+              <button class="btn-sm" data-save="${esc(r.rank)}">저장</button></div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:10px">
+              ${d.permissions.map((p) => `<label style="display:flex;align-items:center;gap:6px;font-size:13px;width:auto">
+                <input type="checkbox" style="width:auto" data-rank="${esc(r.rank)}" value="${p.key}" ${r.perms.includes(p.key)?'checked':''}> ${esc(p.label)}</label>`).join('')}
+            </div>
+          </div>`).join('');
+        body.querySelectorAll('[data-save]').forEach((btn) => btn.addEventListener('click', async () => {
+          const rank = btn.dataset.save;
+          const perms = [...body.querySelectorAll(`input[data-rank="${CSS.escape(rank)}"]:checked`)].map((i) => i.value);
+          try { await api.post('/api/admin/permissions', { rank, perms }); showMsg(pm, `"${rank}" 등급 권한을 저장했어요.`, true); }
+          catch (e) { showMsg(pm, e.message); }
+        }));
+      };
+      loadPerms();
+    }
   </script>
 </body>
 </html>

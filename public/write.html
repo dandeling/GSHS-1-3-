@@ -56,7 +56,7 @@
     </div>
   </main>
   <script type="module">
-    import { renderNav, api, qs, showMsg, getMeta } from '/js/common.js';
+    import { renderNav, api, qs, showMsg, getMeta, can } from '/js/common.js';
     const me = await renderNav({ requireLogin: true });
     const meta = await getMeta();
     const msg = document.getElementById('msg');
@@ -74,8 +74,8 @@
       document.getElementById('content').value = editing.content;
     }
 
-    if (board === 'notice' && me.role !== 'admin') {
-      showMsg(msg, '공지사항은 관리자만 작성할 수 있습니다.');
+    if (board === 'notice' && !can(me, 'notice')) {
+      showMsg(msg, '공지사항 작성 권한이 없습니다.');
       document.getElementById('form').classList.add('hidden');
     }
 

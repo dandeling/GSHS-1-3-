@@ -21,7 +21,7 @@
   </main>
   <script type="module">
     import { renderNav, api, esc, fmt, showMsg } from '/js/common.js';
-    await renderNav({ requireLogin: true, requireAdmin: true });
+    await renderNav({ requireLogin: true, requirePerm: 'reports' });
     const msg = document.getElementById('msg');
     let status = 'open';
 
