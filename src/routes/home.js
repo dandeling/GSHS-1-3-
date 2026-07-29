@@ -5,7 +5,8 @@ import { fetchMeal } from '../neis.js';
 
 const router = express.Router();
 
-function todayStr() { return new Date().toISOString().slice(0, 10); }
+// 한국시간(KST, UTC+9) 기준 오늘 날짜 YYYY-MM-DD — 배포 서버(UTC)에서도 자정에 정확히 전환
+function todayStr() { return new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10); }
 
 // 오늘 급식: DB 캐시 우선, 없으면 NEIS 자동조회 후 캐시
 async function getTodayMeal() {
@@ -30,8 +31,8 @@ router.get('/', requireAuth, async (req, res) => {
   const meal = await getTodayMeal();
 
   const ddays = await db.prepare(`
-    SELECT id, title, target_date, CAST(julianday(target_date) - julianday('now','localtime','start of day') AS INTEGER) AS dleft
-    FROM ddays WHERE julianday(target_date) >= julianday('now','localtime','start of day')
+    SELECT id, title, target_date, CAST(julianday(target_date) - julianday('now','+9 hours','start of day') AS INTEGER) AS dleft
+    FROM ddays WHERE julianday(target_date) >= julianday('now','+9 hours','start of day')
     ORDER BY target_date ASC LIMIT 5
   `).all();
 
@@ -112,7 +113,7 @@ router.post('/meal', requirePerm('meal'), async (req, res) => {
 // D-day 목록(전체) / 추가 / 삭제
 router.get('/ddays', requireAuth, async (req, res) => {
   const rows = await db.prepare(`SELECT id, title, target_date,
-    CAST(julianday(target_date) - julianday('now','localtime','start of day') AS INTEGER) AS dleft
+    CAST(julianday(target_date) - julianday('now','+9 hours','start of day') AS INTEGER) AS dleft
     FROM ddays ORDER BY target_date ASC`).all();
   res.json({ ddays: rows });
 });
