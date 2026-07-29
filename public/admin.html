@@ -157,6 +157,7 @@
             if (u.status === 'suspended' || u.status === 'kicked' || u.status === 'rejected') actions += `<button class="btn-sm" data-act="unsuspend" data-id="${u.id}">활동중으로</button> `;
             if (u.status !== 'kicked') actions += `<button class="btn-sm btn-danger" data-act="kick" data-id="${u.id}">강퇴</button> `;
             actions += `<button class="btn-sm" style="background:var(--danger);color:#fff" data-act="add-demerit" data-id="${u.id}">벌점+1</button> `;
+            actions += `<button class="btn-sm" style="background:var(--green);color:#fff" data-act="add-merit" data-id="${u.id}">상점+1</button> `;
             // 등급·점수 지정은 운영자 전용
             if (isAdminUser) {
               actions += `<button class="btn-sm btn-ghost" data-act="set-rank" data-id="${u.id}" data-rank="${esc(u.custom_rank||'')}">등급지정</button> `;
@@ -189,7 +190,8 @@
               const S = { active: '활동중', suspended: '정지', kicked: '강퇴' };
               const extra = r.demerit >= 9 ? ' → 9점 강퇴 처리' : r.demerit >= 6 ? ' → 6점 1주 정지' : r.demerit >= 3 ? ' → 3점 1일 정지' : '';
               showMsg(msg, `벌점 부여 완료 (누적 ${r.demerit}점 · ${S[r.status] || r.status})${extra}`, true);
-            } else if (act === 'set-rank') { showMsg(msg, '등급을 변경했어요. (권한은 "등급별 권한"에서 설정)', true); loadPerms?.(); }
+            } else if (act === 'add-merit') { showMsg(msg, r.unchanged ? '이 회원은 벌점이 없어요.' : `상점 부여 완료 (벌점 -1 · 남은 벌점 ${r.demerit}점)`, true); }
+            else if (act === 'set-rank') { showMsg(msg, '등급을 변경했어요. (권한은 "등급별 권한"에서 설정)', true); loadPerms?.(); }
             else showMsg(msg, '처리되었습니다.', true);
             await load();
           } catch (err) { showMsg(msg, err.message); }

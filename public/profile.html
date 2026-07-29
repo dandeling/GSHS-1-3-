@@ -32,6 +32,11 @@
       <div id="twoFaState" class="muted" style="font-size:13px;margin-bottom:8px">불러오는 중…</div>
       <div id="twoFaArea"></div>
       <hr />
+      <!-- 활동점수로 벌점 지우기 -->
+      <label>🎯 활동점수로 벌점 지우기</label>
+      <div id="redeemInfo" class="muted" style="font-size:13px;margin-bottom:8px"></div>
+      <button id="redeemBtn" class="btn-sm">벌점 지우기</button>
+      <hr />
       <button id="withdrawBtn" class="btn-sm btn-danger">회원 탈퇴</button>
       <p class="muted" style="font-size:12px;margin-top:6px">탈퇴 시 내 정보는 삭제되고, 쓴 글은 '삭제된 사람'으로 남아요. 탈퇴 후 1주일간 재가입이 제한됩니다.</p>
     </div>
@@ -161,6 +166,24 @@
           });
         }
         renderTwoFa();
+
+        // 활동점수로 벌점 지우기 (1개당 50점)
+        const REDEEM_COST = 50;
+        const ri = document.getElementById('redeemInfo');
+        const rb = document.getElementById('redeemBtn');
+        const renderRedeem = (demerit, point) => {
+          ri.textContent = `현재 벌점 ${demerit}개 · 활동점수 ${point}점 (벌점 1개 = ${REDEEM_COST}점)`;
+          rb.disabled = !(demerit > 0 && point >= REDEEM_COST);
+          rb.textContent = demerit > 0 ? `${REDEEM_COST}점으로 벌점 1개 지우기` : '지울 벌점이 없어요';
+        };
+        renderRedeem(me.demerit || 0, me.point || 0);
+        rb.addEventListener('click', async () => {
+          try {
+            const r = await api.post('/api/home/redeem-demerit');
+            showMsg(pm(), `벌점 1개를 지웠어요! (남은 벌점 ${r.demerit}개 · 활동점수 ${r.point}점)`, true);
+            renderRedeem(r.demerit, r.point);
+          } catch (e) { showMsg(pm(), e.message); }
+        });
 
         const wb = document.getElementById('withdrawBtn');
         if (u.role === 'admin') { wb.disabled = true; wb.textContent = '관리자는 탈퇴 불가'; }

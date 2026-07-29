@@ -109,6 +109,17 @@ router.post('/users/:id/add-demerit', requirePerm('members', 'reports'), async (
   res.json({ ok: true, demerit: after.demerit, status: after.status });
 });
 
+// 상점 부여 (+1) — 벌점 1점 상쇄. 받은 회원에게 긍정 알림
+router.post('/users/:id/add-merit', requirePerm('members', 'reports'), async (req, res) => {
+  const t = await guard(req, res); if (!t) return;
+  if ((t.demerit || 0) <= 0) return res.json({ ok: true, demerit: 0, unchanged: true });
+  await db.prepare('UPDATE users SET demerit=MAX(0, demerit-1) WHERE id=?').run(t.id);
+  const nu = await db.prepare('SELECT demerit FROM users WHERE id=?').get(t.id);
+  await trace(t.id, `${t.username} 상점 부여 (벌점 -1, 남은 벌점 ${nu.demerit})`, req.user.id);
+  await db.prepare('INSERT INTO warnings (user_id, text) VALUES (?, ?)').run(t.id, `😊 상점을 받아 벌점 1점이 차감되었어요. (남은 벌점 ${nu.demerit}점)`);
+  res.json({ ok: true, demerit: nu.demerit });
+});
+
 // 벌점 초기화
 router.post('/users/:id/reset-demerit', requirePerm('members'), async (req, res) => {
   const t = await guard(req, res); if (!t) return;

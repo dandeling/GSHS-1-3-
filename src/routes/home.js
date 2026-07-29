@@ -69,6 +69,18 @@ router.get('/', requireAuth, async (req, res) => {
     attendance: { checkedToday, total: attendCount } });
 });
 
+// 활동점수로 벌점 지우기 (1개당 50점) — 점수를 모아 벌점 상쇄
+export const REDEEM_COST = 50;
+router.post('/redeem-demerit', requireAuth, async (req, res) => {
+  const u = await db.prepare('SELECT username, demerit, point FROM users WHERE id=?').get(req.user.id);
+  if (!u || (u.demerit || 0) <= 0) return res.status(400).json({ error: '차감할 벌점이 없어요.' });
+  if ((u.point || 0) < REDEEM_COST) return res.status(400).json({ error: `활동점수가 부족해요. 벌점 1개당 ${REDEEM_COST}점 필요 (현재 ${u.point || 0}점)` });
+  await db.prepare('UPDATE users SET point = point - ?, demerit = MAX(0, demerit - 1) WHERE id=?').run(REDEEM_COST, req.user.id);
+  const nu = await db.prepare('SELECT demerit, point FROM users WHERE id=?').get(req.user.id);
+  await logAudit('member', req.user.id, 'update', JSON.stringify({ label: `${u.username} 활동점수 ${REDEEM_COST}점으로 벌점 1개 차감 (남은 벌점 ${nu.demerit})` }), req.user.id);
+  res.json({ ok: true, point: nu.point, demerit: nu.demerit, cost: REDEEM_COST });
+});
+
 // 출석체크 (하루 1회, +2점)
 router.post('/attendance', requireAuth, async (req, res) => {
   const today = todayStr();
