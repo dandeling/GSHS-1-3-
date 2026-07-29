@@ -9,15 +9,16 @@
 <body>
   <main>
     <div class="card">
-      <div class="row">
+      <div class="row" style="align-items:center">
         <button class="btn-ghost btn-sm" id="prev">‹</button>
         <h1 id="ym" class="grow center" style="margin:0"></h1>
         <button class="btn-ghost btn-sm" id="next">›</button>
-        <button class="btn-sm hidden" id="addBtn">＋ 일정 추가</button>
+        <button class="btn-sm hidden" id="addBtn">＋ 일정</button>
       </div>
-      <p class="muted" id="hint" style="margin-top:8px"></p>
+      <p class="muted" id="hint" style="margin-top:8px;font-size:12px"></p>
+      <div class="legend" id="legend"></div>
     </div>
-    <div class="card">
+    <div class="card" style="padding:10px">
       <div class="cal-grid" id="cal"></div>
     </div>
     <div class="card hidden" id="listCard">
@@ -25,6 +26,7 @@
       <div id="evList"></div>
     </div>
   </main>
+
   <!-- 일정 추가·수정 모달 -->
   <div class="ev-modal-bg hidden" id="evModal">
     <div class="ev-modal">
@@ -32,142 +34,219 @@
         <button class="icon-btn" id="evClose" style="box-shadow:none">✕</button></div>
       <div id="evMsg" class="hidden"></div>
       <div id="evForm">
+        <label>종류</label>
+        <div class="type-pills" id="typePills"></div>
         <label>제목</label>
-        <input id="evTitle" maxlength="120" placeholder="일정 제목" />
+        <input id="evTitle" maxlength="120" placeholder="예: 중간고사, 홍길동 생일" />
+        <div class="row">
+          <div class="grow"><label>시작 날짜</label><input id="evDate" type="date" /></div>
+          <div class="grow"><label>종료 날짜 <span class="muted">(선택)</span></label><input id="evEnd" type="date" /></div>
+        </div>
         <label>설명 <span class="muted">(선택)</span></label>
-        <textarea id="evDesc" style="min-height:70px" placeholder="설명"></textarea>
-        <label>날짜</label>
-        <input id="evDate" type="date" />
+        <textarea id="evDesc" style="min-height:64px" placeholder="설명"></textarea>
         <div class="row" style="margin-top:14px">
           <button id="evSave">저장</button>
           <button id="evDelete" class="btn-danger hidden">삭제</button>
           <button id="evCancel" class="btn-ghost">취소</button>
         </div>
       </div>
-      <div id="evReadonly" class="hidden">
-        <div style="white-space:pre-wrap;font-size:15px" id="evRoBody"></div>
-      </div>
+      <div id="evReadonly" class="hidden"><div id="evRoBody" style="font-size:15px"></div></div>
     </div>
   </div>
 
   <style>
+    .legend { display:flex; flex-wrap:wrap; gap:6px 10px; margin-top:10px; }
+    .legend .lg { display:inline-flex; align-items:center; gap:4px; font-size:11px; color:var(--muted); }
+    .legend .dot { width:10px; height:10px; border-radius:3px; display:inline-block; }
+    .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
+    .cal-cell { min-height:78px; border-radius:8px; padding:4px 4px 6px; background:var(--bg,transparent);
+      border:1px solid var(--line); display:flex; flex-direction:column; gap:2px; cursor:default; overflow:hidden; }
+    .cal-cell.head { min-height:0; border:none; background:none; text-align:center; font-weight:700; font-size:12px; padding:2px 0; cursor:default; }
+    .cal-cell.empty { border:none; background:none; }
+    .cal-cell.today { border-color:var(--accent,#3b82f6); box-shadow:0 0 0 1px var(--accent,#3b82f6) inset; }
+    .cal-cell.clickable { cursor:pointer; }
+    .cal-cell.clickable:hover { background:var(--hover,rgba(0,0,0,0.04)); }
+    .cal-day { font-size:12px; font-weight:700; }
+    .cal-cell.sun .cal-day, .cal-cell.holi .cal-day { color:#ef4444; }
+    .cal-cell.sat .cal-day { color:#3b82f6; }
+    .cal-holi { font-size:10px; color:#ef4444; font-weight:700; line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .cal-ev { font-size:10.5px; line-height:1.3; padding:1px 4px; border-radius:4px; white-space:nowrap; overflow:hidden;
+      text-overflow:ellipsis; cursor:pointer; border-left:3px solid; }
+    .t-event    { background:#3b82f61f; color:#2563eb; border-color:#3b82f6; }
+    .t-birthday { background:#ec48991f; color:#db2777; border-color:#ec4899; }
+    .t-exam     { background:#f59e0b1f; color:#b45309; border-color:#f59e0b; }
+    .t-school   { background:#10b9811f; color:#059669; border-color:#10b981; }
+    .t-etc      { background:#6b72801f; color:#4b5563; border-color:#6b7280; }
+    :root[data-theme="dark"] .t-event{color:#93c5fd} :root[data-theme="dark"] .t-birthday{color:#f9a8d4}
+    :root[data-theme="dark"] .t-exam{color:#fcd34d} :root[data-theme="dark"] .t-school{color:#6ee7b7}
+    :root[data-theme="dark"] .t-etc{color:#d1d5db}
+    .type-pills { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:4px; }
+    .type-pills .tp { font-size:13px; padding:5px 11px; border-radius:999px; border:1px solid var(--line); cursor:pointer; user-select:none; }
+    .type-pills .tp.on { border-color:transparent; font-weight:700; }
     .ev-modal-bg { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:1000; padding:16px; }
     .ev-modal-bg.hidden { display:none; }
-    .ev-modal { background:var(--card,#fff); color:var(--text); border-radius:14px; max-width:440px; width:100%; padding:20px; box-shadow:0 12px 40px rgba(0,0,0,0.3); }
+    .ev-modal { background:var(--card,#fff); color:var(--text); border-radius:16px; max-width:460px; width:100%; padding:22px; box-shadow:0 16px 48px rgba(0,0,0,0.32); }
+    .ev-li { display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--line); cursor:pointer; }
+    .ev-li .chip { font-size:11px; padding:2px 8px; border-radius:999px; border-left:3px solid; white-space:nowrap; }
   </style>
 
   <script type="module">
     import { renderNav, api, esc, qs, can, showMsg } from '/js/common.js';
     const me = await renderNav({ requireLogin: true });
-    // 캘린더 편집 권한: 관리자 또는 'calendar' 권한을 받은 등급
-    const isAdmin = can(me, 'calendar');
-    if (isAdmin) {
-      document.getElementById('addBtn').classList.remove('hidden');
-      document.getElementById('hint').textContent = '날짜 칸을 눌러 일정을 추가할 수 있어요. 일정을 누르면 수정·삭제할 수 있어요.';
-    } else {
-      document.getElementById('hint').textContent = '일정은 관리자(또는 권한 있는 등급)만 추가·수정·삭제할 수 있습니다.';
-    }
+    const canEdit = can(me, 'calendar');
+
+    const TYPE = {
+      event:    { emoji:'🎉', name:'행사', cls:'t-event',    color:'#3b82f6' },
+      birthday: { emoji:'🎂', name:'생일', cls:'t-birthday', color:'#ec4899' },
+      exam:     { emoji:'📝', name:'시험', cls:'t-exam',     color:'#f59e0b' },
+      school:   { emoji:'🏫', name:'학사', cls:'t-school',   color:'#10b981' },
+      etc:      { emoji:'📌', name:'기타', cls:'t-etc',      color:'#6b7280' },
+    };
+    const tinfo = (t) => TYPE[t] || TYPE.event;
+
+    // 범례
+    document.getElementById('legend').innerHTML =
+      Object.values(TYPE).map((t) => `<span class="lg"><span class="dot" style="background:${t.color}"></span>${t.emoji} ${t.name}</span>`).join('')
+      + `<span class="lg"><span class="dot" style="background:#ef4444"></span>🇰🇷 공휴일</span>`;
+
+    document.getElementById('hint').textContent = canEdit
+      ? '날짜를 눌러 일정을 추가하고, 일정을 눌러 수정·삭제할 수 있어요. 시작·종료 날짜로 기간도 지정돼요.'
+      : '일정은 관리자(또는 권한 있는 등급)만 추가·수정할 수 있습니다.';
+    if (canEdit) document.getElementById('addBtn').classList.remove('hidden');
 
     const now = new Date();
     let year = parseInt(qs('year') || now.getFullYear(), 10);
     let month = parseInt(qs('month') || (now.getMonth() + 1), 10);
+    const pad = (n) => String(n).padStart(2, '0');
 
     async function load() {
       const d = await api.get(`/api/calendar?year=${year}&month=${month}`);
       const events = d.events;
       document.getElementById('ym').textContent = `${year}년 ${month}월`;
 
+      const holiByDay = {};
+      for (const h of (d.holidays || [])) holiByDay[parseInt(h.date.slice(8, 10), 10)] = h.name;
+
+      const daysInMonth = new Date(year, month, 0).getDate();
+      // 기간 일정을 날짜별로 펼침
       const byDay = {};
-      for (const e of events) { const day = parseInt(e.event_date.slice(8, 10), 10); (byDay[day] ||= []).push(e); }
+      for (const e of events) {
+        const start = e.event_date, end = e.end_date || e.event_date;
+        for (let day = 1; day <= daysInMonth; day++) {
+          const ds = `${year}-${pad(month)}-${pad(day)}`;
+          if (ds >= start && ds <= end) (byDay[day] ||= []).push({ e, isStart: ds === start });
+        }
+      }
 
       const first = new Date(year, month - 1, 1).getDay();
-      const days = new Date(year, month, 0).getDate();
       const cal = document.getElementById('cal');
       const heads = ['일', '월', '화', '수', '목', '금', '토'];
-      let html = heads.map((h) => `<div class="cal-cell head">${h}</div>`).join('');
+      let html = heads.map((h, i) => `<div class="cal-cell head" style="color:${i===0?'#ef4444':i===6?'#3b82f6':'inherit'}">${h}</div>`).join('');
       for (let i = 0; i < first; i++) html += `<div class="cal-cell empty"></div>`;
       const today = new Date();
-      for (let day = 1; day <= days; day++) {
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dow = new Date(year, month - 1, day).getDay();
+        const holi = holiByDay[day];
         const isToday = today.getFullYear() === year && today.getMonth() + 1 === month && today.getDate() === day;
-        const evs = (byDay[day] || []).map((e) =>
-          `<div class="cal-ev" data-ev='${esc(JSON.stringify(e))}' title="${esc(e.title)}">${esc(e.title)}</div>`).join('');
-        const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        html += `<div class="cal-cell ${isToday ? 'today' : ''}" data-date="${dateStr}">
-          <span class="cal-day">${day}</span>${evs}</div>`;
+        const dateStr = `${year}-${pad(month)}-${pad(day)}`;
+        const cls = ['cal-cell', isToday ? 'today' : '', dow === 0 ? 'sun' : dow === 6 ? 'sat' : '', holi ? 'holi' : '', canEdit ? 'clickable' : ''].filter(Boolean).join(' ');
+        const holiHtml = holi ? `<div class="cal-holi" title="${esc(holi)}">${esc(holi)}</div>` : '';
+        const evs = (byDay[day] || []).map(({ e, isStart }) => {
+          const t = tinfo(e.event_type);
+          const head = isStart ? `${t.emoji} ` : '↔ ';
+          return `<div class="cal-ev ${t.cls}" data-ev='${esc(JSON.stringify(e))}' title="${esc(e.title)}">${head}${esc(e.title)}</div>`;
+        }).join('');
+        html += `<div class="${cls}" data-date="${dateStr}"><span class="cal-day">${day}</span>${holiHtml}${evs}</div>`;
       }
       cal.innerHTML = html;
 
-      // 일정 클릭 → 상세/수정
-      cal.querySelectorAll('.cal-ev').forEach((el) => el.addEventListener('click', (ev) => {
-        ev.stopPropagation();
-        openEvent(JSON.parse(el.dataset.ev));
-      }));
-      // 빈 칸 클릭 → 관리자 추가
-      if (isAdmin) cal.querySelectorAll('.cal-cell[data-date]').forEach((el) => el.addEventListener('click', () => addEvent(el.dataset.date)));
+      cal.querySelectorAll('.cal-ev').forEach((el) => el.addEventListener('click', (ev) => { ev.stopPropagation(); onEventClick(JSON.parse(el.dataset.ev)); }));
+      if (canEdit) cal.querySelectorAll('.cal-cell[data-date]').forEach((el) => el.addEventListener('click', () => openEditor(null, el.dataset.date)));
 
-      // 리스트
+      // 목록
       const listCard = document.getElementById('listCard');
       if (events.length) {
         listCard.classList.remove('hidden');
-        document.getElementById('evList').innerHTML = events.map((e) => `
-          <div class="comment"><span class="who">${esc(e.event_date)}</span> · ${esc(e.title)}
-          ${e.description ? `<div class="muted" style="white-space:pre-wrap">${esc(e.description)}</div>` : ''}</div>`).join('');
+        document.getElementById('evList').innerHTML = events.map((e) => {
+          const t = tinfo(e.event_type);
+          const range = e.end_date && e.end_date !== e.event_date ? `${e.event_date} ~ ${e.end_date}` : e.event_date;
+          return `<div class="ev-li" data-ev='${esc(JSON.stringify(e))}'>
+            <span class="chip ${t.cls}">${t.emoji} ${t.name}</span>
+            <span class="grow"><b>${esc(e.title)}</b> <span class="muted" style="font-size:12px">· ${range}</span>
+            ${e.description ? `<div class="muted" style="font-size:12px;white-space:pre-wrap">${esc(e.description)}</div>` : ''}</span></div>`;
+        }).join('');
+        document.getElementById('evList').querySelectorAll('.ev-li').forEach((el) => el.addEventListener('click', () => onEventClick(JSON.parse(el.dataset.ev))));
       } else { listCard.classList.add('hidden'); }
     }
 
     // ===== 모달 =====
     const modal = document.getElementById('evModal');
     const evMsg = () => document.getElementById('evMsg');
-    let editingId = null;   // null이면 추가 모드
+    let editingId = null, selType = 'event';
+
+    // 종류 칩
+    const typePills = document.getElementById('typePills');
+    function renderTypePills() {
+      typePills.innerHTML = Object.entries(TYPE).map(([k, t]) =>
+        `<span class="tp ${t.cls} ${k===selType?'on':''}" data-t="${k}" style="${k===selType?`background:${t.color}22;`:''}">${t.emoji} ${t.name}</span>`).join('');
+      typePills.querySelectorAll('[data-t]').forEach((el) => el.addEventListener('click', () => { selType = el.dataset.t; renderTypePills(); }));
+    }
 
     function closeModal() { modal.classList.add('hidden'); }
     document.getElementById('evClose').addEventListener('click', closeModal);
     document.getElementById('evCancel').addEventListener('click', closeModal);
     modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
 
-    // 일정 클릭
-    function openEvent(e) {
-      if (isAdmin) { openEditor(e); return; }
-      // 편집 권한 없으면 읽기 전용
-      openReadonly(e);
-    }
+    function onEventClick(e) { if (canEdit) openEditor(e); else openReadonly(e); }
+
     function openReadonly(e) {
       document.getElementById('evForm').classList.add('hidden');
       document.getElementById('evReadonly').classList.remove('hidden');
+      const t = tinfo(e.event_type);
+      const range = e.end_date && e.end_date !== e.event_date ? `${e.event_date} ~ ${e.end_date}` : e.event_date;
       document.getElementById('evModalTitle').textContent = '일정';
-      document.getElementById('evRoBody').textContent = `📅 ${e.event_date}\n\n${e.title}\n\n${e.description || ''}\n\n작성: ${e.author || ''}`;
+      document.getElementById('evRoBody').innerHTML =
+        `<div><span class="chip ${t.cls}" style="padding:2px 8px;border-radius:999px;border-left:3px solid">${t.emoji} ${t.name}</span></div>
+         <h2 style="margin:10px 0 4px">${esc(e.title)}</h2>
+         <div class="muted">📅 ${esc(range)}</div>
+         ${e.description ? `<div style="white-space:pre-wrap;margin-top:10px">${esc(e.description)}</div>` : ''}
+         <div class="muted" style="font-size:12px;margin-top:10px">작성: ${esc(e.author || '')}</div>`;
       evMsg().classList.add('hidden');
       modal.classList.remove('hidden');
     }
-    // 추가/수정 폼 열기 (e 없으면 추가)
+
     function openEditor(e, presetDate) {
       document.getElementById('evReadonly').classList.add('hidden');
       document.getElementById('evForm').classList.remove('hidden');
       evMsg().classList.add('hidden');
       editingId = e ? e.id : null;
+      selType = e ? (e.event_type || 'event') : 'event';
+      renderTypePills();
       document.getElementById('evModalTitle').textContent = e ? '일정 수정' : '일정 추가';
       document.getElementById('evTitle').value = e ? e.title : '';
       document.getElementById('evDesc').value = e ? (e.description || '') : '';
-      document.getElementById('evDate').value = e ? e.event_date : (presetDate || `${year}-${String(month).padStart(2, '0')}-01`);
-      document.getElementById('evDelete').classList.toggle('hidden', !e);   // 수정일 때만 삭제 버튼
+      document.getElementById('evDate').value = e ? e.event_date : (presetDate || `${year}-${pad(month)}-01`);
+      document.getElementById('evEnd').value = e ? (e.end_date || '') : '';
+      document.getElementById('evDelete').classList.toggle('hidden', !e);
       modal.classList.remove('hidden');
       document.getElementById('evTitle').focus();
     }
-    function addEvent(date) { openEditor(null, date); }
 
-    // 저장(추가 or 수정)
     document.getElementById('evSave').addEventListener('click', async () => {
-      const title = document.getElementById('evTitle').value.trim();
-      const description = document.getElementById('evDesc').value.trim();
-      const event_date = document.getElementById('evDate').value;
-      if (!title || !event_date) { showMsg(evMsg(), '제목과 날짜를 입력하세요.'); return; }
+      const body = {
+        title: document.getElementById('evTitle').value.trim(),
+        description: document.getElementById('evDesc').value.trim(),
+        event_date: document.getElementById('evDate').value,
+        end_date: document.getElementById('evEnd').value || null,
+        event_type: selType,
+      };
+      if (!body.title || !body.event_date) { showMsg(evMsg(), '제목과 시작 날짜를 입력하세요.'); return; }
       try {
-        if (editingId) await api.put('/api/calendar/' + editingId, { title, description, event_date });
-        else await api.post('/api/calendar', { title, description, event_date });
+        if (editingId) await api.put('/api/calendar/' + editingId, body);
+        else await api.post('/api/calendar', body);
         closeModal(); await load();
       } catch (err) { showMsg(evMsg(), err.message); }
     });
-    // 삭제
     document.getElementById('evDelete').addEventListener('click', async () => {
       if (!editingId || !confirm('이 일정을 삭제할까요?')) return;
       try { await api.del('/api/calendar/' + editingId); closeModal(); await load(); }
