@@ -10,10 +10,10 @@ export const SLOTS = ['8교시', '야간1차시', '야간2차시'];
 router.get('/', requireAuth, async (req, res) => {
   const rows = await db.prepare(`
     SELECT id, sched_date, slot, content FROM special_schedule
-    WHERE sched_date >= date('now','localtime','-3 days')
+    WHERE sched_date >= date('now','+9 hours','-3 days')
     ORDER BY sched_date ASC, id ASC
   `).all();
-  res.json({ items: rows, slots: SLOTS, isAdmin: hasPerm(req.user, 'special'), today: new Date().toISOString().slice(0, 10) });
+  res.json({ items: rows, slots: SLOTS, isAdmin: hasPerm(req.user, 'special'), today: new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10) });
 });
 
 // 등록 (관리자)
