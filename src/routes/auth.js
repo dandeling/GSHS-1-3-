@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import db, { anonymizeUser } from '../db.js';
 import { SCHOOL_EMAIL_REGEX } from '../constants.js';
-import { issueSession, clearSession, loadUser, requireAuth, JWT_SECRET } from '../middleware.js';
+import { issueSession, clearSession, loadUser, requireAuth, JWT_SECRET, computePerms } from '../middleware.js';
 import { mailEnabled, sendCodeMail } from '../mailer.js';
 import { generateSecret, verifyTotp, otpauthURL } from '../totp.js';
 
@@ -177,6 +177,7 @@ router.post('/login', async (req, res) => {
     if (!verifyTotp(user.totp_secret, totpCode)) return res.status(401).json({ twoFactorRequired: true, error: '인증 앱 코드가 올바르지 않습니다.' });
   }
 
+  user.perms = await computePerms(user);
   issueSession(res, user);
   res.json({ ok: true, user: publicUser(user) });
 });
@@ -312,7 +313,7 @@ router.post('/change-password', requireAuth, async (req, res) => {
 
 // 화면 노출용 사용자 정보 (실명 제외)
 export function publicUser(u) {
-  return { id: u.id, username: u.username, role: u.role, status: u.status, demerit: u.demerit, grade: u.grade, point: u.point || 0, rank: u.custom_rank || null };
+  return { id: u.id, username: u.username, role: u.role, status: u.status, demerit: u.demerit, grade: u.grade, point: u.point || 0, rank: u.custom_rank || null, perms: u.perms || [] };
 }
 
 export default router;

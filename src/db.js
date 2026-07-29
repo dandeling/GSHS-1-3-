@@ -141,6 +141,10 @@ CREATE TABLE IF NOT EXISTS warnings (
   id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, text TEXT NOT NULL,
   seen INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+-- 등급별 권한: 커스텀 등급(custom_rank)에 부여된 관리 권한
+CREATE TABLE IF NOT EXISTS rank_permissions (
+  rank TEXT NOT NULL, perm TEXT NOT NULL, PRIMARY KEY (rank, perm)
+);
 CREATE INDEX IF NOT EXISTS idx_posts_board ON posts(board, subject, category);
 CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(post_id);
 CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_logs(entity_type, entity_id);

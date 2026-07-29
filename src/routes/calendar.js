@@ -1,6 +1,6 @@
 import express from 'express';
 import db, { logAudit } from '../db.js';
-import { requireAuth, requireAdmin } from '../middleware.js';
+import { requireAuth, requirePerm, hasPerm } from '../middleware.js';
 
 const router = express.Router();
 
@@ -21,11 +21,11 @@ router.get('/', requireAuth, async (req, res) => {
       ORDER BY e.event_date ASC, e.id ASC
     `).all();
   }
-  res.json({ events: rows, isAdmin: req.user.role === 'admin' });
+  res.json({ events: rows, isAdmin: hasPerm(req.user, 'calendar') });
 });
 
 // 추가 (관리자만)
-router.post('/', requireAdmin, async (req, res) => {
+router.post('/', requirePerm('calendar'), async (req, res) => {
   const { title, description, event_date } = req.body || {};
   if (!title?.trim() || !event_date) return res.status(400).json({ error: '제목과 날짜를 입력하세요.' });
   if (!/^\d{4}-\d{2}-\d{2}$/.test(event_date)) return res.status(400).json({ error: '날짜 형식(YYYY-MM-DD)을 확인하세요.' });
@@ -36,7 +36,7 @@ router.post('/', requireAdmin, async (req, res) => {
 });
 
 // 수정 (관리자만)
-router.put('/:id', requireAdmin, async (req, res) => {
+router.put('/:id', requirePerm('calendar'), async (req, res) => {
   const ev = await db.prepare('SELECT id FROM events WHERE id=?').get(req.params.id);
   if (!ev) return res.status(404).json({ error: '일정을 찾을 수 없습니다.' });
   const { title, description, event_date } = req.body || {};
@@ -48,7 +48,7 @@ router.put('/:id', requireAdmin, async (req, res) => {
 });
 
 // 삭제 (관리자만)
-router.delete('/:id', requireAdmin, async (req, res) => {
+router.delete('/:id', requirePerm('calendar'), async (req, res) => {
   const ev = await db.prepare('SELECT title, event_date FROM events WHERE id=?').get(req.params.id);
   await db.prepare('DELETE FROM events WHERE id=?').run(req.params.id);
   if (ev) await logAudit('event', req.params.id, 'delete', JSON.stringify({ label: `${ev.event_date} · ${ev.title}` }), req.user.id);

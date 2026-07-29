@@ -1,12 +1,12 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import db, { anonymizeUser, logAudit } from '../db.js';
-import { requireAdmin, addDemerit } from '../middleware.js';
+import { requireAdmin, requirePerm, addDemerit, PERMISSIONS } from '../middleware.js';
 
 const router = express.Router();
 
 // 전체 활동 기록 (감사 로그) — 별명·실명·동작·내용·시각
-router.get('/audit', requireAdmin, async (req, res) => {
+router.get('/audit', requirePerm('audit'), async (req, res) => {
   const PAGE = 30;
   const page = Math.max(1, parseInt(req.query.page || '1', 10));
   const total = (await db.prepare('SELECT COUNT(*) c FROM audit_logs').get()).c;
@@ -21,7 +21,7 @@ router.get('/audit', requireAdmin, async (req, res) => {
 
 // 회원 목록 (실명·학번·이메일·벌점 포함) — 관리자만
 // 강퇴·거절된 회원은 목록에서 제외(익명화 처리됨)
-router.get('/users', requireAdmin, async (req, res) => {
+router.get('/users', requirePerm('members'), async (req, res) => {
   const status = req.query.status;
   let rows;
   const removed = ['kicked', 'rejected', 'withdrawn'];
@@ -55,7 +55,7 @@ async function guard(req, res) {
 const trace = (id, label, actorId) => logAudit('member', id, 'update', JSON.stringify({ label }), actorId);
 
 // 승인
-router.post('/users/:id/approve', requireAdmin, async (req, res) => {
+router.post('/users/:id/approve', requirePerm('members'), async (req, res) => {
   const t = await guard(req, res); if (!t) return;
   await setStatus(req.params.id, 'active');
   await trace(t.id, `${t.username} 회원 승인`, req.user.id);
@@ -63,7 +63,7 @@ router.post('/users/:id/approve', requireAdmin, async (req, res) => {
 });
 
 // 거절 (익명화 + 목록에서 제거)
-router.post('/users/:id/reject', requireAdmin, async (req, res) => {
+router.post('/users/:id/reject', requirePerm('members'), async (req, res) => {
   const t = await guard(req, res); if (!t) return;
   await setStatus(req.params.id, 'rejected');
   await trace(t.id, `${t.username} 가입 거절`, req.user.id);
@@ -72,7 +72,7 @@ router.post('/users/:id/reject', requireAdmin, async (req, res) => {
 });
 
 // 정지 (기본 1일, days 지정 가능)
-router.post('/users/:id/suspend', requireAdmin, async (req, res) => {
+router.post('/users/:id/suspend', requirePerm('members'), async (req, res) => {
   const t = await guard(req, res); if (!t) return;
   const days = Math.max(1, parseInt(req.body?.days || '1', 10));
   const until = new Date(Date.now() + days * 24 * 3600 * 1000).toISOString();
@@ -82,7 +82,7 @@ router.post('/users/:id/suspend', requireAdmin, async (req, res) => {
 });
 
 // 정지 해제 → 활동중
-router.post('/users/:id/unsuspend', requireAdmin, async (req, res) => {
+router.post('/users/:id/unsuspend', requirePerm('members'), async (req, res) => {
   const t = await guard(req, res); if (!t) return;
   await setStatus(req.params.id, 'active');
   await trace(t.id, `${t.username} 정지 해제`, req.user.id);
@@ -90,7 +90,7 @@ router.post('/users/:id/unsuspend', requireAdmin, async (req, res) => {
 });
 
 // 강퇴 (익명화 + 목록에서 제거)
-router.post('/users/:id/kick', requireAdmin, async (req, res) => {
+router.post('/users/:id/kick', requirePerm('members'), async (req, res) => {
   const t = await guard(req, res); if (!t) return;
   await setStatus(req.params.id, 'kicked');
   await trace(t.id, `${t.username} 강퇴`, req.user.id);
@@ -99,7 +99,7 @@ router.post('/users/:id/kick', requireAdmin, async (req, res) => {
 });
 
 // 벌점 즉시 부여 (+1). 3=1일정지 / 6=1주정지 / 9=강퇴(익명화) 자동 적용
-router.post('/users/:id/add-demerit', requireAdmin, async (req, res) => {
+router.post('/users/:id/add-demerit', requirePerm('members', 'reports'), async (req, res) => {
   const t = await guard(req, res); if (!t) return;
   const after = await addDemerit(t.id);
   const STATUS_KO = { active: '활동중', suspended: '정지', kicked: '강퇴' };
@@ -110,7 +110,7 @@ router.post('/users/:id/add-demerit', requireAdmin, async (req, res) => {
 });
 
 // 벌점 초기화
-router.post('/users/:id/reset-demerit', requireAdmin, async (req, res) => {
+router.post('/users/:id/reset-demerit', requirePerm('members'), async (req, res) => {
   const t = await guard(req, res); if (!t) return;
   await db.prepare('UPDATE users SET demerit=0 WHERE id=?').run(req.params.id);
   await trace(t.id, `${t.username} 벌점 초기화`, req.user.id);
@@ -136,13 +136,13 @@ router.post('/users/:id/set-rank', requireAdmin, async (req, res) => {
 });
 
 // 재가입 제한 목록 (1주일 제한 중인 이메일)
-router.get('/rejoin-blocks', requireAdmin, async (req, res) => {
+router.get('/rejoin-blocks', requirePerm('members'), async (req, res) => {
   const rows = await db.prepare("SELECT email, until, created_at FROM rejoin_blocks WHERE until > datetime('now') ORDER BY until ASC").all();
   res.json({ blocks: rows });
 });
 
 // 재가입 즉시 허용 (제한 해제) — 관리자 허락
-router.post('/rejoin-allow', requireAdmin, async (req, res) => {
+router.post('/rejoin-allow', requirePerm('members'), async (req, res) => {
   const email = String(req.body?.email || '').trim();
   if (!email) return res.status(400).json({ error: '이메일을 입력하세요.' });
   await db.prepare('DELETE FROM rejoin_blocks WHERE email=?').run(email);
@@ -151,7 +151,7 @@ router.post('/rejoin-allow', requireAdmin, async (req, res) => {
 });
 
 // 2단계 인증 해제 (분실·잠김 복구용)
-router.post('/users/:id/reset-2fa', requireAdmin, async (req, res) => {
+router.post('/users/:id/reset-2fa', requirePerm('members'), async (req, res) => {
   const t = await guard(req, res); if (!t) return;
   await db.prepare('UPDATE users SET totp_enabled=0, totp_secret=NULL WHERE id=?').run(t.id);
   await trace(t.id, `${t.username} 2단계 인증 해제`, req.user.id);
@@ -159,7 +159,7 @@ router.post('/users/:id/reset-2fa', requireAdmin, async (req, res) => {
 });
 
 // 비밀번호 초기화 (관리자가 임시 비번 지정)
-router.post('/users/:id/reset-password', requireAdmin, async (req, res) => {
+router.post('/users/:id/reset-password', requirePerm('members'), async (req, res) => {
   const t = await guard(req, res); if (!t) return;
   const pw = String(req.body?.password || '').trim();
   if (pw.length < 6) return res.status(400).json({ error: '임시 비밀번호는 6자 이상으로 지정하세요.' });
@@ -170,13 +170,13 @@ router.post('/users/:id/reset-password', requireAdmin, async (req, res) => {
 
 // ===== 신고함 =====
 // 미처리 신고 개수 (사이드바 배지용)
-router.get('/reports/count', requireAdmin, async (req, res) => {
+router.get('/reports/count', requirePerm('reports'), async (req, res) => {
   const c = (await db.prepare("SELECT COUNT(*) c FROM reports WHERE status='open'").get()).c;
   res.json({ count: c });
 });
 
 // 신고 목록 (기본 미처리). 대상 글/댓글의 내용·작성자까지 함께
-router.get('/reports', requireAdmin, async (req, res) => {
+router.get('/reports', requirePerm('reports'), async (req, res) => {
   const status = req.query.status === 'all' ? null : (req.query.status || 'open');
   const rows = status
     ? await db.prepare('SELECT * FROM reports WHERE status=? ORDER BY id DESC LIMIT 100').all(status)
@@ -204,11 +204,37 @@ router.get('/reports', requireAdmin, async (req, res) => {
 });
 
 // 신고 처리(완료/무시) — 상태만 종료로 변경
-router.post('/reports/:id/resolve', requireAdmin, async (req, res) => {
+router.post('/reports/:id/resolve', requirePerm('reports'), async (req, res) => {
   const r = await db.prepare('SELECT id FROM reports WHERE id=?').get(req.params.id);
   if (!r) return res.status(404).json({ error: '신고를 찾을 수 없습니다.' });
   await db.prepare("UPDATE reports SET status='resolved', handled_at=datetime('now'), handler_id=? WHERE id=?").run(req.user.id, req.params.id);
   res.json({ ok: true });
+});
+
+// ===== 등급별 권한 관리 (관리자 전용) =====
+// 권한 목록 + 현재 등급→권한 매핑
+router.get('/permissions', requireAdmin, async (req, res) => {
+  const inUse = await db.prepare("SELECT DISTINCT custom_rank AS rank FROM users WHERE custom_rank IS NOT NULL AND custom_rank <> ''").all();
+  const withPerms = await db.prepare('SELECT DISTINCT rank FROM rank_permissions').all();
+  const rankSet = new Set([...inUse.map((r) => r.rank), ...withPerms.map((r) => r.rank)]);
+  const maps = await db.prepare('SELECT rank, perm FROM rank_permissions').all();
+  const byRank = {};
+  for (const r of rankSet) byRank[r] = [];
+  for (const m of maps) { (byRank[m.rank] ||= []).push(m.perm); }
+  const ranks = [...rankSet].sort().map((r) => ({ rank: r, perms: byRank[r] || [] }));
+  res.json({ permissions: PERMISSIONS, ranks });
+});
+
+// 특정 등급의 권한 설정 (전체 교체)
+router.post('/permissions', requireAdmin, async (req, res) => {
+  const rank = String(req.body?.rank || '').trim();
+  if (!rank) return res.status(400).json({ error: '등급을 지정하세요.' });
+  const valid = new Set(PERMISSIONS.map((p) => p.key));
+  const perms = Array.isArray(req.body?.perms) ? [...new Set(req.body.perms.filter((p) => valid.has(p)))] : [];
+  await db.prepare('DELETE FROM rank_permissions WHERE rank=?').run(rank);
+  for (const p of perms) await db.prepare('INSERT INTO rank_permissions (rank, perm) VALUES (?, ?)').run(rank, p);
+  await logAudit('member', 0, 'update', JSON.stringify({ label: `등급 "${rank}" 권한 설정: ${perms.join(', ') || '(없음)'}` }), req.user.id);
+  res.json({ ok: true, rank, perms });
 });
 
 export default router;

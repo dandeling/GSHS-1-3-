@@ -46,7 +46,7 @@
 
   <script type="module">
     import { renderNav, api, esc, fmt } from '/js/common.js';
-    await renderNav({ requireLogin: true, requireAdmin: true });
+    await renderNav({ requireLogin: true, requirePerm: 'audit' });
 
     // 엔티티/동작 → 한글 라벨 + 아이콘
     const ENTITY = {

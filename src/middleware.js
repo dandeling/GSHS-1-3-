@@ -4,6 +4,39 @@ import db from './db.js';
 export const JWT_SECRET = process.env.JWT_SECRET || 'gshs-1-3-dev-secret-change-me';
 export const COOKIE_NAME = 'session';
 
+// 관리자가 등급에 부여할 수 있는 권한 목록 (관리자는 항상 전부 보유)
+export const PERMISSIONS = [
+  { key: 'notice', label: '공지 작성' },
+  { key: 'moderate', label: '글·댓글·채팅 삭제(운영)' },
+  { key: 'reports', label: '신고 처리' },
+  { key: 'members', label: '회원 관리' },
+  { key: 'inquiries', label: '문의 답변' },
+  { key: 'audit', label: '전체 기록 보기' },
+  { key: 'calendar', label: '캘린더 관리' },
+  { key: 'timetable', label: '시간표 관리' },
+  { key: 'special', label: '8교시·야간 관리' },
+  { key: 'meal', label: '급식·D-day 관리' },
+  { key: 'weekly_poll', label: '주간투표 관리' },
+];
+const ALL_PERMS = PERMISSIONS.map((p) => p.key);
+
+// 사용자의 권한 목록 계산: 관리자는 전부, 그 외는 커스텀 등급에 부여된 권한
+export async function computePerms(user) {
+  if (!user) return [];
+  if (user.role === 'admin') return [...ALL_PERMS];
+  if (!user.custom_rank) return [];
+  const rows = await db.prepare('SELECT perm FROM rank_permissions WHERE rank=?').all(user.custom_rank);
+  return rows.map((r) => r.perm);
+}
+
+// 권한 보유 여부 (관리자이거나, 지정한 권한 중 하나라도 가진 경우)
+export function hasPerm(user, ...perms) {
+  if (!user) return false;
+  if (user.role === 'admin') return true;
+  const set = user.perms || [];
+  return perms.some((p) => set.includes(p));
+}
+
 // 세션 쿠키 발급 (maxAge 없음 → 브라우저 닫으면 로그아웃, 자동 로그인 없음)
 export function issueSession(res, user) {
   const token = jwt.sign({ uid: user.id }, JWT_SECRET, { expiresIn: '12h' });
@@ -31,6 +64,7 @@ export async function loadUser(req) {
     user.status = 'active';
     user.suspended_until = null;
   }
+  user.perms = await computePerms(user);
   return user;
 }
 
@@ -52,6 +86,14 @@ export function requireAdmin(req, res, next) {
   requireAuth(req, res, () => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: '관리자만 접근할 수 있습니다.' });
     next();
+  });
+}
+
+// 특정 권한 필요 (관리자이거나 등급에 해당 권한이 부여된 경우)
+export function requirePerm(...perms) {
+  return (req, res, next) => requireAuth(req, res, () => {
+    if (hasPerm(req.user, ...perms)) return next();
+    res.status(403).json({ error: '이 작업을 할 권한이 없습니다.' });
   });
 }
 
